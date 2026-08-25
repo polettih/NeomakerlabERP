@@ -1,0 +1,2 @@
+import {requireUser} from '@/lib/auth'; import {InventoryManager} from '@/components/inventory-manager';
+export default async function EstoquePage(){const {supabase}=await requireUser();const {data}=await supabase.from('materials').select('*').order('category').order('name');return <div className="content"><div className="section-title"><div><h1>📦 Estoque</h1><p className="muted">Insumos, ferramentas e materiais com entradas e baixas automáticas.</p></div></div><InventoryManager materials={data??[]}/></div>}

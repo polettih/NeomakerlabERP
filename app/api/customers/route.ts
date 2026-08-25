@@ -1,7 +1,4 @@
 import {NextResponse} from "next/server"; import {requireUser} from "@/lib/auth";
-export async function POST(request:Request){
-  try{const body=await request.json();if(!body.name)return NextResponse.json({error:"Nome é obrigatório."},{status:400});
-    const {supabase}=await requireUser();const {data:member}=await supabase.from("organization_members").select("organization_id").limit(1).single();if(!member)throw new Error("Organização não encontrada.");
-    const {data,error}=await supabase.from("customers").insert({organization_id:member.organization_id,name:body.name,email:body.email||null,phone:body.phone||null}).select().single();if(error)throw error;return NextResponse.json(data);
-  }catch(e:any){return NextResponse.json({error:e.message||"Erro interno"},{status:500})}
-}
+export async function POST(request:Request){try{const b=await request.json(); const {supabase}=await requireUser(); const {data:m}=await supabase.from("organization_members").select("organization_id").limit(1).single(); if(!m)throw new Error("Organização não encontrada."); const {data,error}=await supabase.from("customers").insert({organization_id:m.organization_id,name:b.name,email:b.email||null,phone:b.phone||null,behavior:b.behavior||"Normal",notes:b.notes||null}).select().single(); if(error)throw error; return NextResponse.json(data)}catch(e:any){return NextResponse.json({error:e.message},{status:500})}}
+export async function PUT(request:Request){try{const b=await request.json(); const {supabase}=await requireUser(); const {error}=await supabase.from("customers").update({name:b.name,email:b.email||null,phone:b.phone||null,behavior:b.behavior,notes:b.notes||null}).eq("id",b.id); if(error)throw error; return NextResponse.json({ok:true})}catch(e:any){return NextResponse.json({error:e.message},{status:500})}}
+export async function DELETE(request:Request){try{const id=new URL(request.url).searchParams.get("id"); const {supabase}=await requireUser(); const {error}=await supabase.from("customers").delete().eq("id",id); if(error)throw error; return NextResponse.json({ok:true})}catch(e:any){return NextResponse.json({error:e.message},{status:500})}}

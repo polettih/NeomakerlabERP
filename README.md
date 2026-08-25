@@ -166,3 +166,10 @@ As receitas iniciais são pontos de partida e podem ser copiadas para a bibliote
 A migration `003_painting_recipe_library.sql` cria uma biblioteca por organização e 20 receitas iniciais de referência. Execute-a uma vez no SQL Editor do Supabase depois das migrations 001 e 002.
 
 As receitas iniciais são pontos de partida e podem ser copiadas para a biblioteca da organização e depois ajustadas.
+
+
+## V7
+Inclui clientes editáveis com comportamento e observações, além da calculadora de precificação baseada na planilha enviada pelo usuário. Execute apenas a migration 006 após as anteriores.
+
+## V8
+A V8 separa a precificação da tela de produto e adiciona gestão de materiais/estoque. Execute `007_inventory_materials_pricing.sql` no Supabase. Depois use as telas `Precificação` e `Estoque`.

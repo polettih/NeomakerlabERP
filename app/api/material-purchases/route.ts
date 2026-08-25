@@ -1,0 +1,2 @@
+import {NextResponse} from 'next/server'; import {requireUser} from '@/lib/auth';
+export async function POST(req:Request){try{const b=await req.json();const {supabase}=await requireUser();const {error}=await supabase.rpc('register_material_purchase',{p_material:b.material_id,p_quantity:Number(b.quantity),p_total:Number(b.total_cost),p_supplier:b.supplier||'',p_notes:b.notes||''});if(error)throw error;return NextResponse.json({ok:true})}catch(e:any){return NextResponse.json({error:e.message||'Erro ao registrar compra.'},{status:500})}}
