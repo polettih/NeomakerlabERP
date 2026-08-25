@@ -1,0 +1,11 @@
+{
+  "name": "NeoMaker ERP",
+  "short_name": "NeoMaker ERP",
+  "description": "Gestão de pedidos, produção, clientes e financeiro.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0b0d10",
+  "theme_color": "#0b0d10",
+  "lang": "pt-BR",
+  "icons": []
+}

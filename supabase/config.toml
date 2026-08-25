@@ -1,0 +1,15 @@
+project_id = "neomaker-erp"
+
+[api]
+enabled = true
+
+[db]
+enabled = true
+
+[studio]
+enabled = true
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/**"]
