@@ -16,6 +16,10 @@ Depois da publicação, o uso diário acontece apenas pelo navegador. Não é ne
 - Supabase Auth + PostgreSQL + Row Level Security
 - Vercel para hospedagem
 - PWA para instalação como aplicativo no navegador
+- Fotos múltiplas por produto via Supabase Storage
+- Calendário de prazos com atalho para Google Agenda
+- Receita de pintura separada
+- Filas Enviados e Finalizados
 
 ## O que já existe
 
@@ -150,3 +154,15 @@ A próxima versão deve adicionar:
 - integração TikTok Shop
 - notificações
 - relatórios
+
+## Biblioteca de receitas de pintura
+
+A migration `003_painting_recipe_library.sql` cria uma biblioteca por organização e 20 receitas iniciais de referência. Execute-a uma vez no SQL Editor do Supabase depois das migrations 001 e 002.
+
+As receitas iniciais são pontos de partida e podem ser copiadas para a biblioteca da organização e depois ajustadas.
+
+## Biblioteca de receitas de pintura
+
+A migration `003_painting_recipe_library.sql` cria uma biblioteca por organização e 20 receitas iniciais de referência. Execute-a uma vez no SQL Editor do Supabase depois das migrations 001 e 002.
+
+As receitas iniciais são pontos de partida e podem ser copiadas para a biblioteca da organização e depois ajustadas.
