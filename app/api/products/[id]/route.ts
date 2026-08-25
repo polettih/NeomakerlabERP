@@ -9,6 +9,7 @@ export async function PATCH(request:Request,{params}:{params:Promise<{id:string}
     if(typeof body.name === "string") update.name=body.name.trim();
     if(body.sale_price!==undefined) update.sale_price=Number(body.sale_price||0);
     if(body.estimated_cost!==undefined) update.estimated_cost=Number(body.estimated_cost||0);
+    if(typeof body.category === 'string') update.category=body.category;
     const {data,error}=await supabase.from("products").update(update).eq("id",id).select().single();
     if(error) throw error; return NextResponse.json(data);
   }catch(e:any){return NextResponse.json({error:e.message||"Erro ao atualizar produto."},{status:500})}
