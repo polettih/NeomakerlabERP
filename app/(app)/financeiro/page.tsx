@@ -6,11 +6,12 @@ type Row={category:string;qty:number;gross:number;received:number;receivable:num
 const numberValue=(v:unknown)=>Number(v??0);
 export default async function FinanceiroPage(){
  const {supabase,organizationId}=await requireUser();
- const [{data:orders},{data:items},{data:payments},{data:expenses},{data:settings}]=await Promise.all([
+ const [{data:orders},{data:items},{data:payments},{data:expenses},{data:materialPurchases},{data:settings}]=await Promise.all([
   supabase.from("orders").select("id,status,total,gross_total,shipping_cost,marketplace_fee"),
   supabase.from("order_items").select("order_id,product_name,quantity,unit_price,unit_cost,total,products(category),product_id"),
   supabase.from("payments").select("order_id,amount"),
-  supabase.from("expenses").select("id,description,category,amount,status,due_date").order("created_at",{ascending:false}),
+  supabase.from("expenses").select("id,description,category,amount,status,due_date,source_type").order("created_at",{ascending:false}),
+  supabase.from("material_purchases").select("id,total_cost,created_at"),
   supabase.from("organization_settings").select("labor_hour_rate").eq("organization_id",organizationId).maybeSingle()
  ]);
  const validOrders=(orders??[]).filter(o=>o.status!=="cancelled"); const validIds=new Set(validOrders.map(o=>o.id));
@@ -29,9 +30,13 @@ export default async function FinanceiroPage(){
  }
  for(const row of Object.values(rowsMap)) row.receivable=Math.max(row.gross-row.received,0);
  const spent=(expenses??[]).filter(e=>e.status!=="cancelled").reduce((s,e)=>s+numberValue(e.amount),0);
+ const materialPurchasesTotal=(materialPurchases??[]).reduce((s,e)=>s+numberValue(e.total_cost),0);
+ const totalCashOut=spent+materialPurchasesTotal;
+ const cashResult=totalReceived-totalCashOut;
  const rows=Object.values(rowsMap).sort((a,b)=>b.gross-a.gross); const profit=totalGross-totalCost-totalFees;
  return <div className="content"><div className="section-title"><div><h1>Financeiro</h1><p className="muted">Acompanhe venda bruta, taxas do marketplace, mão de obra, recebimentos e lucro.</p></div></div>
-  <FinanceTabs summary={{qty:totalQty,gross:totalGross,received:totalReceived,receivable:Math.max(totalGross-totalReceived,0),profit}} rows={rows} fees={{total:totalFees,count:validOrders.filter(o=>numberValue(o.marketplace_fee)>0).length}} labor={{total:totalLabor,items:totalLaborItems}} spent={spent} initialLaborHourRate={Number(settings?.labor_hour_rate ?? 30)}/>
+  <FinanceTabs summary={{qty:totalQty,gross:totalGross,received:totalReceived,receivable:Math.max(totalGross-totalReceived,0),profit}} rows={rows} fees={{total:totalFees,count:validOrders.filter(o=>numberValue(o.marketplace_fee)>0).length}} labor={{total:totalLabor,items:totalLaborItems}} spent={spent+materialPurchasesTotal} initialLaborHourRate={Number(settings?.labor_hour_rate ?? 30)}/>
+  <div className="grid three-col" style={{marginTop:18}}><div className="card"><span className="muted">Compras de insumos</span><h2>{materialPurchasesTotal.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</h2></div><div className="card"><span className="muted">Saídas totais</span><h2>{totalCashOut.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</h2></div><div className="card"><span className="muted">Resultado de caixa</span><h2 className={cashResult>=0?"":"error"}>{cashResult>=0?"🟢 Superávit":"🔴 Déficit"} {cashResult.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</h2></div></div>
   <div className="grid" style={{gridTemplateColumns:"1fr 2fr",marginTop:18}}><CreateExpenseForm/><div className="card"><h2>Gastos e compras</h2><div className="table-wrap"><table><thead><tr><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Status</th></tr></thead><tbody>{(expenses??[]).map(e=><tr key={e.id}><td>{e.description}</td><td>{e.category||"-"}</td><td>{numberValue(e.amount).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</td><td><span className="badge">{e.status}</span></td></tr>)}{!expenses?.length&&<tr><td colSpan={4} className="muted">Nenhuma despesa.</td></tr>}</tbody></table></div></div></div>
  </div>;
 }
