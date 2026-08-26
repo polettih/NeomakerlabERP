@@ -20,10 +20,15 @@ export async function POST(request:Request){
     }
     const marketplaceFee=Math.max(merchandiseTotal*feePercent+fixedFee,0);
     const grossTotal=Math.max(merchandiseTotal+marketplaceFee+shipping,0);
-    const {data:order,error:oe}=await supabase.from("orders").insert({organization_id:member.organization_id,customer_id:body.customer_id||null,sales_channel_id:body.sales_channel_id||null,status:"new",payment_status:"pending",subtotal,discount,shipping_cost:shipping,marketplace_fee:marketplaceFee,marketplace_fee_percent:feePercent,marketplace_fixed_fee:fixedFee,gross_total:grossTotal,total:grossTotal,expected_date:body.expected_date||null}).select().single();if(oe)throw oe;
+    const status=body.status||"new";
+    const allowed=["new","preparation","production","finishing","packaging","shipped","delivered","cancelled"];
+    if(!allowed.includes(status)) return NextResponse.json({error:"Status inválido."},{status:400});
+    const completedAt=status==="delivered"?(body.completed_at||new Date().toISOString()):null;
+    const {data:order,error:oe}=await supabase.from("orders").insert({organization_id:member.organization_id,customer_id:body.customer_id||null,sales_channel_id:body.sales_channel_id||null,status,payment_status:body.payment_status||"pending",order_date:body.order_date||new Date().toISOString(),expected_date:body.expected_date||null,completed_at:completedAt,delivered_at:status==="delivered"?completedAt:null,subtotal,discount,shipping_cost:shipping,marketplace_fee:marketplaceFee,marketplace_fee_percent:feePercent,marketplace_fixed_fee:fixedFee,gross_total:grossTotal,total:grossTotal}).select().single();if(oe)throw oe;
     const {error:ie}=await supabase.from("order_items").insert(items.map((i:any)=>({...i,order_id:order.id})));if(ie)throw ie;
-    const {error:he}=await supabase.from("order_status_history").insert({order_id:order.id,new_status:"new"});if(he)throw he;
-    const {error:pr}=await supabase.from("production_orders").insert({organization_id:member.organization_id,order_id:order.id,status:"pending"});if(pr)throw pr;
+    const {error:he}=await supabase.from("order_status_history").insert({order_id:order.id,new_status:status});if(he)throw he;
+    const productionStatus=status==="cancelled"?"cancelled":(["shipped","delivered"].includes(status)?"completed":(status==="production"?"in_progress":"pending"));
+    const {error:pr}=await supabase.from("production_orders").insert({organization_id:member.organization_id,order_id:order.id,status:productionStatus,started_at:status==="production"?new Date().toISOString():null,completed_at:["shipped","delivered","cancelled"].includes(status)?(completedAt||new Date().toISOString()):null});if(pr)throw pr;
     return NextResponse.json(order);
   }catch(e:any){return NextResponse.json({error:e.message||"Erro interno"},{status:500})}
 }
