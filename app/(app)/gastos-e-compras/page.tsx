@@ -6,9 +6,10 @@ export default async function GastosPage(){
  const {supabase}=await requireUser();
  const [{data:materials},{data:expenses},{data:purchases}]=await Promise.all([
    supabase.from('materials').select('*').eq('active',true).order('material_type').order('name'),
-   supabase.from('expenses').select('id,description,category,amount,status,due_date,created_at').order('created_at',{ascending:false})
+   supabase.from('expenses').select('id,description,category,amount,status,due_date,created_at').order('created_at',{ascending:false}),
+   supabase.from('material_purchases').select('id,total_cost,created_at').order('created_at',{ascending:false})
  ]);
- const materialPurchasesTotal=(purchases??[]).reduce((s,e)=>s+Number(e.total_cost||0),0); const expenseTotal=(expenses??[]).filter(e=>e.status!=="cancelled").reduce((s,e)=>s+Number(e.amount||0),0); const stockValue=(materials??[]).reduce((s,m)=>s+Number(m.quantity_on_hand||0)*Number(m.average_cost||0),0);
+ const materialPurchasesTotal=(purchases??[]).reduce((sum: number,e: {total_cost?: number | string | null})=>sum+Number(e.total_cost||0),0); const expenseTotal=(expenses??[]).filter(e=>e.status!=="cancelled").reduce((sum: number,e: {amount?: number | string | null})=>sum+Number(e.amount||0),0); const stockValue=(materials??[]).reduce((sum: number,m: {quantity_on_hand?: number | string | null; average_cost?: number | string | null})=>sum+Number(m.quantity_on_hand||0)*Number(m.average_cost||0),0);
  return <div className="content"><div className="section-title"><div><h1>🛒 Gastos e compras</h1><p className="muted">Gestão unificada de estoque, compras, insumos e demais gastos da operação.</p></div></div>
  <div className="grid three-col" style={{marginBottom:18}}><div className="card"><span className="muted">Materiais cadastrados</span><h2>{materials?.length||0}</h2></div><div className="card"><span className="muted">Valor em estoque</span><h2>{money(stockValue)}</h2></div><div className="card"><span className="muted">Saídas registradas</span><h2>{money(expenseTotal+materialPurchasesTotal)}</h2></div></div>
  <InventoryManager materials={materials??[]}/>
