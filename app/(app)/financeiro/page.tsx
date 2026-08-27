@@ -2,6 +2,10 @@ import { requireUser } from "@/lib/auth";
 import { CreateExpenseForm } from "@/components/create-expense-form";
 import { FinanceTabs } from "@/components/finance-tabs";
 import { FinancialHistory } from "@/components/financial-history";
+import { ExpenseList } from "@/components/expense-list";
+import { RecurringExpensesManager } from "@/components/recurring-expenses-manager";
+import { MonthlySummary } from "@/components/monthly-summary";
+import { ensureRecurringExpensesForCurrentMonth } from "@/lib/services/recurring-expenses";
 
 type Row = { category: string; qty: number; gross: number; received: number; receivable: number; cost: number; fees: number; labor: number };
 type Expense = { id: string; description: string; category: string | null; amount: unknown; status: string | null; due_date: string | null; paid_at: string | null; created_at: string | null; source_type: string | null; source_id: string | null };
@@ -28,13 +32,19 @@ function monthRange(start: string, end: string) {
 
 export default async function FinanceiroPage() {
   const { supabase, organizationId } = await requireUser();
-  const [{ data: orders }, { data: items }, { data: payments }, { data: expenses }, { data: materialPurchases }, { data: settings }] = await Promise.all([
+
+  // Gera as despesas recorrentes do mês corrente (aluguel, assinaturas etc.) antes de
+  // carregar os dados, para que já apareçam nesta mesma visita.
+  await ensureRecurringExpensesForCurrentMonth(supabase, organizationId);
+
+  const [{ data: orders }, { data: items }, { data: payments }, { data: expenses }, { data: materialPurchases }, { data: settings }, { data: recurringExpenses }] = await Promise.all([
     supabase.from("orders").select("id,status,total,gross_total,shipping_cost,marketplace_fee,order_date"),
     supabase.from("order_items").select("order_id,product_name,quantity,unit_price,unit_cost,total,products(category),product_id"),
     supabase.from("payments").select("order_id,amount,payment_date"),
-    supabase.from("expenses").select("id,description,category,amount,status,due_date,paid_at,created_at,source_type,source_id").order("created_at", { ascending: false }),
+    supabase.from("expenses").select("id,description,category,amount,status,due_date,paid_at,created_at,source_type,source_id").order("due_date", { ascending: false, nullsFirst: false }),
     supabase.from("material_purchases").select("id,total_cost,created_at"),
     supabase.from("organization_settings").select("labor_hour_rate").eq("organization_id", organizationId).maybeSingle(),
+    supabase.from("recurring_expenses").select("id,description,category,amount,day_of_month,active").order("created_at", { ascending: true }),
   ]);
 
   const validOrders = (orders ?? []).filter((o) => !cancelledStatus(o.status));
@@ -129,8 +139,17 @@ export default async function FinanceiroPage() {
   }
 
   const initialOutflow = totalCashOut;
+
+  const currentRow = historyRows[historyRows.length - 1];
+  const previousRow = historyRows.length > 1 ? historyRows[historyRows.length - 2] : null;
+  const toMonth = (row: HistoryRow) => ({ label: row.label, gross: row.gross, received: row.received, expensesPaid: row.outflow, result: row.cashResult });
+  const currentMonth = toMonth(currentRow);
+  const previousMonth = previousRow ? toMonth(previousRow) : null;
+
   return <div className="content">
     <div className="section-title"><div><h1>Financeiro</h1><p className="muted">Controle de caixa, resultado, dívidas, recebimentos e evolução financeira desde o início da operação.</p></div></div>
+
+    <MonthlySummary current={currentMonth} previous={previousMonth} />
 
     <div className="grid four-col" style={{ marginTop: 18 }}>
       <div className="card"><span className="muted">Faturamento acumulado</span><h2>{money(totalGross)}</h2><small className="muted">Vendas válidas</small></div>
@@ -151,7 +170,11 @@ export default async function FinanceiroPage() {
 
     <div className="grid" style={{ gridTemplateColumns: "1fr 2fr", marginTop: 18 }}>
       <CreateExpenseForm />
-      <div className="card"><div className="section-title"><div><h2>Gastos e compras</h2><p className="muted">Lançamentos pagos e obrigações em aberto que alimentam o fluxo de caixa.</p></div></div><div className="table-wrap"><table><thead><tr><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Status</th></tr></thead><tbody>{(expenses ?? []).map(e => <tr key={e.id}><td>{e.description}</td><td>{e.category || "-"}</td><td>{money(n(e.amount))}</td><td><span className="badge">{e.status || "-"}</span></td></tr>)}{!(expenses ?? []).length && <tr><td colSpan={4} className="muted">Nenhuma despesa.</td></tr>}</tbody></table></div></div>
+      <ExpenseList expenses={(expenses ?? []) as Expense[]} />
+    </div>
+
+    <div style={{ marginTop: 18 }}>
+      <RecurringExpensesManager items={recurringExpenses ?? []} />
     </div>
   </div>;
 }
