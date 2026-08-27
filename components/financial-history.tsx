@@ -1,30 +1,7 @@
 "use client";
 
-type HistoryRow = {
-  key: string;
-  label: string;
-  gross: number;
-  received: number;
-  receivable: number;
-  purchases: number;
-  expenses: number;
-  equipment: number;
-  outflow: number;
-  cashResult: number;
-  cumulative: number;
-  payable: number;
-  payableDue: number;
-};
-const money = (value: number) => {
-  const abs = Math.abs(value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  return value < 0 ? `R$ - ${abs.replace(/^R\$\s?/, "")}` : abs;
-};
-const compact = (value: number) => {
-  const a = Math.abs(value);
-  if (a >= 1e6) return `R$ ${(a / 1e6).toFixed(1)} mi`;
-  if (a >= 1e3) return `R$ ${(a / 1e3).toFixed(1)} mil`;
-  return `R$ ${Math.round(a)}`;
-};
+import { signedMoney as money, compactMoney as compact } from "@/lib/format";
+import type { FinanceHistoryRow } from "@/lib/types";
 
 export function FinancialHistory({
   rows,
@@ -34,7 +11,7 @@ export function FinancialHistory({
   totalGross,
   totalReceived,
 }: {
-  rows: HistoryRow[];
+  rows: FinanceHistoryRow[];
   totalPayable: number;
   totalReceivable: number;
   totalOutflow: number;

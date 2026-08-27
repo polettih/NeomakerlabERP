@@ -6,72 +6,16 @@ import { RecurringExpensesManager } from "@/components/recurring-expenses-manage
 import { MonthlySummary } from "@/components/monthly-summary";
 import { PageTabs } from "@/components/page-tabs";
 import { ensureRecurringExpensesForCurrentMonth } from "@/lib/services/recurring-expenses";
-
-type Row = {
-  category: string;
-  qty: number;
-  gross: number;
-  received: number;
-  receivable: number;
-  cost: number;
-  fees: number;
-  labor: number;
-};
-type Expense = {
-  id: string;
-  description: string;
-  category: string | null;
-  amount: unknown;
-  status: string | null;
-  due_date: string | null;
-  paid_at: string | null;
-  created_at: string | null;
-  source_type: string | null;
-  source_id: string | null;
-};
-type HistoryRow = {
-  key: string;
-  label: string;
-  gross: number;
-  received: number;
-  receivable: number;
-  purchases: number;
-  expenses: number;
-  equipment: number;
-  outflow: number;
-  cashResult: number;
-  cumulative: number;
-  payable: number;
-  payableDue: number;
-};
-
-const n = (v: unknown) => {
-  const x = Number(v ?? 0);
-  return Number.isFinite(x) ? x : 0;
-};
-const validDate = (v: unknown) => {
-  const d = new Date(String(v ?? ""));
-  return Number.isNaN(d.getTime()) ? null : d;
-};
-const monthKey = (v: unknown) => {
-  const d = validDate(v);
-  return d ? `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}` : null;
-};
-const monthLabel = (key: string) => {
-  const [y, m] = key.split("-").map(Number);
-  return new Intl.DateTimeFormat("pt-BR", { month: "short", year: "numeric", timeZone: "UTC" })
-    .format(new Date(Date.UTC(y, m - 1, 1)))
-    .replace(" de ", "/")
-    .replace(".", "");
-};
-const paidStatus = (status: unknown) =>
-  ["paid", "pago", "paid_out"].includes(String(status ?? "").toLowerCase());
-const cancelledStatus = (status: unknown) =>
-  ["cancelled", "canceled", "cancelado"].includes(String(status ?? "").toLowerCase());
-const money = (value: number) => {
-  const abs = Math.abs(value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  return value < 0 ? `R$ - ${abs.replace(/^R\$\s?/, "")}` : abs;
-};
+import {
+  n,
+  validDate,
+  monthKey,
+  monthLabel,
+  isPaidStatus as paidStatus,
+  isCancelledStatus as cancelledStatus,
+  signedMoney as money,
+} from "@/lib/format";
+import type { Expense, FinanceCategoryRow, FinanceHistoryRow } from "@/lib/types";
 
 function monthRange(start: string, end: string) {
   const result: string[] = [];
@@ -152,7 +96,7 @@ export default async function FinanceiroPage() {
     for (const p of data ?? []) pricing.set(p.product_id, n(p.labor_cost));
   }
 
-  const rowsMap: Record<string, Row> = {};
+  const rowsMap: Record<string, FinanceCategoryRow> = {};
   let totalGross = 0,
     totalReceived = 0,
     totalCost = 0,
@@ -212,13 +156,27 @@ export default async function FinanceiroPage() {
     .reduce((s, e) => s + n(e.amount), 0);
   const unpaidExpenses = validExpenses.filter((e) => !paidStatus(e.status));
   const payableTotal = unpaidExpenses.reduce((s, e) => s + n(e.amount), 0);
+  const today = new Date();
+  const overduePayableTotal = unpaidExpenses
+    .filter((e) => {
+      const due = validDate(e.due_date);
+      return due !== null && due < today;
+    })
+    .reduce((s, e) => s + n(e.amount), 0);
   const totalCashOut = materialPurchasesTotal + paidExpenses;
   const cashBalance = totalReceived - totalCashOut;
   const operatingResult = totalGross - totalCost - totalFees - totalLabor;
   const recovery =
     totalCashOut > 0 ? Math.max(0, Math.min(100, (totalReceived / totalCashOut) * 100)) : 100;
+  // Despesas administrativas pagas (aluguel, marketing, assinaturas etc.), excluindo
+  // compras de material (já embutidas no custo do produto vendido, via unit_cost) e
+  // compras de equipamento (investimento/capex, não uma despesa operacional recorrente).
+  // Usar totalCashOut aqui contaria o custo do material duas vezes no resultado.
+  const operatingExpensesPaid = validExpenses
+    .filter((e) => paidStatus(e.status) && e.source_type !== "machine_purchase")
+    .reduce((s, e) => s + n(e.amount), 0);
 
-  const historyMap = new Map<string, HistoryRow>();
+  const historyMap = new Map<string, FinanceHistoryRow>();
   const ensure = (key: string) => {
     let row = historyMap.get(key);
     if (!row) {
@@ -235,7 +193,6 @@ export default async function FinanceiroPage() {
         cashResult: 0,
         cumulative: 0,
         payable: 0,
-        payableDue: 0,
       };
       historyMap.set(key, row);
     }
@@ -258,18 +215,11 @@ export default async function FinanceiroPage() {
   for (const e of validExpenses) {
     const paid = paidStatus(e.status);
     const paymentKey = monthKey(e.paid_at);
-    const createdKey = monthKey(e.created_at);
-    const dueKey = monthKey(e.due_date || e.created_at);
     if (paid && paymentKey) {
       const row = ensure(paymentKey);
       if (e.source_type === "machine_purchase") row.equipment += n(e.amount);
       else row.expenses += n(e.amount);
     }
-    if (!paid && dueKey) {
-      const row = ensure(dueKey);
-      row.payableDue += n(e.amount);
-    }
-    if (!createdKey && !paymentKey && !dueKey) continue;
   }
 
   // Inclui todos os meses entre a primeira movimentação e o mês atual, mesmo que algum mês não tenha movimento.
@@ -319,7 +269,7 @@ export default async function FinanceiroPage() {
 
   const currentRow = historyRows[historyRows.length - 1];
   const previousRow = historyRows.length > 1 ? historyRows[historyRows.length - 2] : null;
-  const toMonth = (row: HistoryRow) => ({
+  const toMonth = (row: FinanceHistoryRow) => ({
     label: row.label,
     gross: row.gross,
     received: row.received,
@@ -367,7 +317,11 @@ export default async function FinanceiroPage() {
           <h2 className={payableTotal > 0 ? "error" : ""}>
             {payableTotal > 0 ? money(-payableTotal) : money(0)}
           </h2>
-          <small className="muted">Obrigações em aberto</small>
+          {overduePayableTotal > 0 ? (
+            <small className="error">⚠ {money(-overduePayableTotal)} vencidas</small>
+          ) : (
+            <small className="muted">Obrigações em aberto</small>
+          )}
         </div>
       </div>
 
@@ -417,7 +371,7 @@ export default async function FinanceiroPage() {
                   count: validOrders.filter((o) => n(o.marketplace_fee) > 0).length,
                 }}
                 labor={{ total: totalLabor, items: totalLaborItems }}
-                spent={totalCashOut}
+                spent={operatingExpensesPaid}
                 initialLaborHourRate={n(settings?.labor_hour_rate ?? 30)}
               />
             ),

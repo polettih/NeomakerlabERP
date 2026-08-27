@@ -1,16 +1,13 @@
 "use client";
 
+import { signedMoney as money } from "@/lib/format";
+
 type Month = {
   label: string;
   gross: number;
   received: number;
   expensesPaid: number;
   result: number;
-};
-
-const money = (value: number) => {
-  const abs = Math.abs(value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  return value < 0 ? `R$ - ${abs.replace(/^R\$\s?/, "")}` : abs;
 };
 
 function delta(current: number, previous: number) {

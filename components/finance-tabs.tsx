@@ -1,16 +1,8 @@
 "use client";
-import { useState } from "react";
-const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-type Row = {
-  category: string;
-  qty: number;
-  gross: number;
-  received: number;
-  receivable: number;
-  cost: number;
-  fees: number;
-  labor: number;
-};
+import { useId, useState } from "react";
+import { money } from "@/lib/format";
+import { errorMessage } from "@/lib/errors";
+import type { FinanceCategoryRow } from "@/lib/types";
 export function FinanceTabs({
   summary,
   rows,
@@ -20,12 +12,13 @@ export function FinanceTabs({
   initialLaborHourRate,
 }: {
   summary: { qty: number; gross: number; received: number; receivable: number; profit: number };
-  rows: Row[];
+  rows: FinanceCategoryRow[];
   fees: { total: number; count: number };
   labor: { total: number; items: number };
   spent: number;
   initialLaborHourRate: number;
 }) {
+  const laborRateInputId = useId();
   const [tab, setTab] = useState<"sales" | "fees" | "labor">("sales");
   const [rate, setRate] = useState(String(initialLaborHourRate));
   const [savedRate, setSavedRate] = useState(initialLaborHourRate);
@@ -49,8 +42,8 @@ export function FinanceTabs({
       if (!res.ok) throw new Error(j.error || "Erro ao salvar.");
       setSavedRate(value);
       setRate(String(value));
-    } catch (e: any) {
-      setError(e.message || "Erro ao salvar valor da hora.");
+    } catch (e) {
+      setError(errorMessage(e, "Erro ao salvar valor da hora."));
     } finally {
       setBusy(false);
     }
@@ -99,14 +92,23 @@ export function FinanceTabs({
             <div className="card">
               <div className="label">Lucro líquido das vendas</div>
               <div className="value">{money(summary.profit)}</div>
+              <p className="muted" style={{ marginTop: 4 }}>
+                Venda bruta − custo do produto − taxas − mão de obra.
+              </p>
             </div>
             <div className="card">
-              <div className="label">Despesas gerais</div>
+              <div className="label">Despesas administrativas pagas</div>
               <div className="value">{money(spent)}</div>
+              <p className="muted" style={{ marginTop: 4 }}>
+                Aluguel, marketing, assinaturas etc. (não inclui compra de material nem
+                equipamentos, já contabilizados no custo do produto e no fluxo de caixa).
+              </p>
             </div>
             <div className="card">
-              <div className="label">Resultado após despesas</div>
-              <div className="value">{money(summary.profit - spent)}</div>
+              <div className="label">Resultado líquido do período</div>
+              <div className={`value ${summary.profit - spent < 0 ? "error" : ""}`}>
+                {money(summary.profit - spent)}
+              </div>
             </div>
           </div>
           <div className="card" style={{ marginTop: 18 }}>
@@ -136,7 +138,7 @@ export function FinanceTabs({
                       <td>{money(r.received)}</td>
                       <td>{money(r.fees)}</td>
                       <td>{money(r.labor)}</td>
-                      <td>{money(r.gross - r.cost - r.fees)}</td>
+                      <td>{money(r.gross - r.cost - r.fees - r.labor)}</td>
                       <td>{money(r.receivable)}</td>
                     </tr>
                   ))}
@@ -184,8 +186,9 @@ export function FinanceTabs({
               precificação dos produtos.
             </p>
             <div className="field">
-              <label>Valor cobrado por hora</label>
+              <label htmlFor={laborRateInputId}>Valor cobrado por hora</label>
               <input
+                id={laborRateInputId}
                 className="input"
                 type="number"
                 min="0"
@@ -198,7 +201,7 @@ export function FinanceTabs({
               {busy ? "Salvando..." : "Salvar valor da hora"}
             </button>
             {error && (
-              <div className="error" style={{ marginTop: 12 }}>
+              <div className="error" role="alert" style={{ marginTop: 12 }}>
                 {error}
               </div>
             )}

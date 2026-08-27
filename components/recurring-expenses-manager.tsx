@@ -12,11 +12,8 @@ type Recurring = {
   active: boolean;
 };
 
-const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const n = (v: unknown) => {
-  const x = Number(v ?? 0);
-  return Number.isFinite(x) ? x : 0;
-};
+import { errorMessage } from "@/lib/errors";
+import { money, n } from "@/lib/format";
 
 export function RecurringExpensesManager({ items }: { items: Recurring[] }) {
   const r = useRouter();
@@ -50,8 +47,8 @@ export function RecurringExpensesManager({ items }: { items: Recurring[] }) {
       setAmount("");
       setDayOfMonth("1");
       r.refresh();
-    } catch (err: any) {
-      setError(err.message || "Erro");
+    } catch (err) {
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
