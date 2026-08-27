@@ -21,6 +21,8 @@ table{width:100%;border-collapse:collapse}th,td{padding:13px 15px;text-align:lef
 th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}tr:last-child td{border-bottom:0}
 .badge{display:inline-flex;padding:5px 9px;border-radius:999px;background:#252b33;color:#d8dee7;font-size:12px;font-weight:700}
 .badge.green{background:#0d2d1a;color:#86efac}.badge.yellow{background:#3a2c06;color:#fde68a}
+.list-filters{flex-wrap:wrap;gap:12px}.filters-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.filters-row .input,.filters-row .select{width:auto;min-width:150px}
+@media(max-width:700px){.filters-row{width:100%}.filters-row .input,.filters-row .select{min-width:0;flex:1 1 140px}}
 .error{background:#3b1111;border:1px solid #6f1d1d;color:#fecaca;border-radius:8px;padding:10px}
 .success{background:#0d2d1a;border:1px solid #1c6a3a;color:#bbf7d0;border-radius:8px;padding:10px}
 .login-page{min-height:100vh;display:grid;place-items:center;padding:20px}.login-card{width:min(420px,100%);background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:28px}

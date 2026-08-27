@@ -1,8 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import Link from "next/link";
-import { OrderStatusActions } from "@/components/order-status-actions";
-import { OrderDeleteButton } from "@/components/order-delete-button";
-const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+import { OrderTable } from "@/components/order-table";
+
 export default async function PedidosPage() {
   const { supabase } = await requireUser();
   const { data } = await supabase
@@ -22,55 +21,7 @@ export default async function PedidosPage() {
           + Novo pedido
         </Link>
       </div>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Data</th>
-              <th>Cliente</th>
-              <th>Canal</th>
-              <th>Prazo</th>
-              <th>Conclusão</th>
-              <th>Status</th>
-              <th>Pagamento</th>
-              <th>Venda bruta</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(data ?? []).map((o: any) => (
-              <tr key={o.id}>
-                <td>{new Date(o.order_date).toLocaleDateString("pt-BR")}</td>
-                <td>{o.customers?.name || "—"}</td>
-                <td>{o.sales_channels?.name || "—"}</td>
-                <td>
-                  {o.expected_date ? new Date(o.expected_date).toLocaleDateString("pt-BR") : "—"}
-                </td>
-                <td>
-                  {o.completed_at ? new Date(o.completed_at).toLocaleDateString("pt-BR") : "—"}
-                </td>
-                <td>
-                  <OrderStatusActions id={o.id} status={o.status} />
-                </td>
-                <td>
-                  <span className="badge">{o.payment_status}</span>
-                </td>
-                <td>{money(Number(o.gross_total ?? o.total))}</td>
-                <td>
-                  <OrderDeleteButton id={o.id} />
-                </td>
-              </tr>
-            ))}
-            {!data?.length && (
-              <tr>
-                <td colSpan={9} className="muted">
-                  Nenhum pedido cadastrado.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <OrderTable orders={(data ?? []) as any} />
     </div>
   );
 }
