@@ -2,32 +2,9 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EXPENSE_CATEGORIES } from "@/lib/expense-categories";
-
-type Expense = {
-  id: string;
-  description: string;
-  category: string | null;
-  amount: unknown;
-  status: string | null;
-  due_date: string | null;
-  paid_at: string | null;
-  source_type: string | null;
-};
-
-const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const n = (v: unknown) => {
-  const x = Number(v ?? 0);
-  return Number.isFinite(x) ? x : 0;
-};
-const isPaid = (status: string | null) => status === "paid";
-const isCancelled = (status: string | null) => status === "cancelled";
-
-function monthKeyOf(dateStr: string | null) {
-  if (!dateStr) return null;
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return null;
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-}
+import { money, n, monthKey as monthKeyOf, monthLabel, formatDate, isPaidStatus, isCancelledStatus } from "@/lib/format";
+import { errorMessage } from "@/lib/errors";
+import type { Expense } from "@/lib/types";
 
 function EditableRow({ expense, onDone }: { expense: Expense; onDone: () => void }) {
   const [description, setDescription] = useState(expense.description);
@@ -54,8 +31,8 @@ function EditableRow({ expense, onDone }: { expense: Expense; onDone: () => void
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Erro ao salvar.");
       onDone();
-    } catch (e: any) {
-      setError(e.message || "Erro ao salvar.");
+    } catch (e) {
+      setError(errorMessage(e, "Erro ao salvar."));
     } finally {
       setBusy(false);
     }
@@ -121,6 +98,7 @@ function EditableRow({ expense, onDone }: { expense: Expense; onDone: () => void
 export function ExpenseList({ expenses }: { expenses: Expense[] }) {
   const r = useRouter();
   const [monthFilter, setMonthFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "paid" | "cancelled">("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -135,17 +113,22 @@ export function ExpenseList({ expenses }: { expenses: Expense[] }) {
   }, [expenses]);
 
   const visible = useMemo(() => {
-    if (monthFilter === "all") return expenses;
-    return expenses.filter(
-      (e) => (monthKeyOf(e.due_date) || monthKeyOf(e.paid_at)) === monthFilter
-    );
-  }, [expenses, monthFilter]);
+    return expenses.filter((e) => {
+      if (monthFilter !== "all" && (monthKeyOf(e.due_date) || monthKeyOf(e.paid_at)) !== monthFilter)
+        return false;
+      if (statusFilter === "paid" && !isPaidStatus(e.status)) return false;
+      if (statusFilter === "cancelled" && !isCancelledStatus(e.status)) return false;
+      if (statusFilter === "pending" && (isPaidStatus(e.status) || isCancelledStatus(e.status)))
+        return false;
+      return true;
+    });
+  }, [expenses, monthFilter, statusFilter]);
 
   async function toggleStatus(e: Expense) {
     setBusyId(e.id);
     setError("");
     try {
-      const nextStatus = isPaid(e.status) ? "pending" : "paid";
+      const nextStatus = isPaidStatus(e.status) ? "pending" : "paid";
       const res = await fetch(`/api/expenses/${e.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -154,8 +137,8 @@ export function ExpenseList({ expenses }: { expenses: Expense[] }) {
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Erro ao atualizar status.");
       r.refresh();
-    } catch (err: any) {
-      setError(err.message || "Erro ao atualizar status.");
+    } catch (err) {
+      setError(errorMessage(err, "Erro ao atualizar status."));
     } finally {
       setBusyId(null);
     }
@@ -170,8 +153,8 @@ export function ExpenseList({ expenses }: { expenses: Expense[] }) {
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Erro ao excluir.");
       r.refresh();
-    } catch (err: any) {
-      setError(err.message || "Erro ao excluir.");
+    } catch (err) {
+      setError(errorMessage(err, "Erro ao excluir."));
     } finally {
       setBusyId(null);
     }
@@ -186,22 +169,37 @@ export function ExpenseList({ expenses }: { expenses: Expense[] }) {
             Lançamentos pagos e obrigações em aberto que alimentam o fluxo de caixa.
           </p>
         </div>
-        <select
-          className="input"
-          value={monthFilter}
-          onChange={(e) => setMonthFilter(e.target.value)}
-          style={{ maxWidth: 180 }}
-        >
-          <option value="all">Todos os meses</option>
-          {months.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <select
+            className="input"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+            style={{ maxWidth: 150 }}
+            aria-label="Filtrar por status"
+          >
+            <option value="all">Todos os status</option>
+            <option value="pending">A pagar</option>
+            <option value="paid">Pagas</option>
+            <option value="cancelled">Canceladas</option>
+          </select>
+          <select
+            className="input"
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value)}
+            style={{ maxWidth: 180 }}
+            aria-label="Filtrar por mês"
+          >
+            <option value="all">Todos os meses</option>
+            {months.map((m) => (
+              <option key={m} value={m}>
+                {monthLabel(m)}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       {error && (
-        <div className="error" style={{ marginBottom: 10 }}>
+        <div className="error" role="alert" style={{ marginBottom: 10 }}>
           {error}
         </div>
       )}
@@ -233,16 +231,12 @@ export function ExpenseList({ expenses }: { expenses: Expense[] }) {
                   <td>{e.description}</td>
                   <td>{e.category || "-"}</td>
                   <td>{money(n(e.amount))}</td>
-                  <td>
-                    {e.due_date
-                      ? new Date(e.due_date).toLocaleDateString("pt-BR", { timeZone: "UTC" })
-                      : "-"}
-                  </td>
+                  <td>{formatDate(e.due_date)}</td>
                   <td>
                     <span
-                      className={`badge ${isPaid(e.status) ? "kpi-green" : isCancelled(e.status) ? "" : "kpi-yellow"}`}
+                      className={`badge ${isPaidStatus(e.status) ? "kpi-green" : isCancelledStatus(e.status) ? "" : "kpi-yellow"}`}
                     >
-                      {isPaid(e.status) ? "Paga" : isCancelled(e.status) ? "Cancelada" : "A pagar"}
+                      {isPaidStatus(e.status) ? "Paga" : isCancelledStatus(e.status) ? "Cancelada" : "A pagar"}
                     </span>
                     {e.source_type === "recurring" && (
                       <small className="muted" style={{ marginLeft: 6 }}>
@@ -252,13 +246,13 @@ export function ExpenseList({ expenses }: { expenses: Expense[] }) {
                   </td>
                   <td>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {!isCancelled(e.status) && (
+                      {!isCancelledStatus(e.status) && (
                         <button
                           className="btn btn-secondary"
                           disabled={busyId === e.id}
                           onClick={() => toggleStatus(e)}
                         >
-                          {isPaid(e.status) ? "Marcar a pagar" : "Marcar paga"}
+                          {isPaidStatus(e.status) ? "Marcar a pagar" : "Marcar paga"}
                         </button>
                       )}
                       <button

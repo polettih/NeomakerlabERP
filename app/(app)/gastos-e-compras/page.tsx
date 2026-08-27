@@ -4,7 +4,9 @@ import { CreateExpenseForm } from "@/components/create-expense-form";
 import { InventoryManager } from "@/components/inventory-manager";
 import { ExpenseList } from "@/components/expense-list";
 import { PageTabs } from "@/components/page-tabs";
-const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+import { money, n, isPaidStatus, isCancelledStatus } from "@/lib/format";
+import type { Expense } from "@/lib/types";
+
 export default async function GastosPage() {
   const { supabase } = await requireUser();
   const [{ data: materials }, { data: expenses }, { data: purchases }] = await Promise.all([
@@ -20,24 +22,21 @@ export default async function GastosPage() {
       .select("id,total_cost,created_at")
       .order("created_at", { ascending: false }),
   ]);
-  const materialPurchasesTotal = (purchases ?? []).reduce(
-    (sum: number, e: { total_cost?: number | string | null }) => sum + Number(e.total_cost || 0),
-    0
-  );
-  const expenseTotal = (expenses ?? [])
-    .filter((e) => e.status !== "cancelled")
-    .reduce(
-      (sum: number, e: { amount?: number | string | null }) => sum + Number(e.amount || 0),
-      0
-    );
-  const payableTotal = (expenses ?? [])
-    .filter((e) => e.status !== "cancelled" && e.status !== "paid")
-    .reduce((sum: number, e: { amount?: number | string | null }) => sum + Number(e.amount || 0), 0);
+  const validExpenses = ((expenses ?? []) as Expense[]).filter((e) => !isCancelledStatus(e.status));
+  const materialPurchasesTotal = (purchases ?? []).reduce((sum, p) => sum + n(p.total_cost), 0);
+  // "Saídas registradas" é dinheiro que já saiu do caixa: só despesas PAGAS +
+  // compras de material (que representam gasto já efetivado). Despesas ainda
+  // em aberto entram no card "Despesas em aberto" — somar as duas coisas aqui
+  // contaria a mesma despesa em aberto duas vezes.
+  const paidExpenseTotal = validExpenses
+    .filter((e) => isPaidStatus(e.status))
+    .reduce((sum, e) => sum + n(e.amount), 0);
+  const payableTotal = validExpenses
+    .filter((e) => !isPaidStatus(e.status))
+    .reduce((sum, e) => sum + n(e.amount), 0);
   const stockValue = (materials ?? []).reduce(
-    (
-      sum: number,
-      m: { quantity_on_hand?: number | string | null; average_cost?: number | string | null }
-    ) => sum + Number(m.quantity_on_hand || 0) * Number(m.average_cost || 0),
+    (sum: number, m: { quantity_on_hand?: number | string | null; average_cost?: number | string | null }) =>
+      sum + n(m.quantity_on_hand) * n(m.average_cost),
     0
   );
   return (
@@ -64,7 +63,8 @@ export default async function GastosPage() {
         </div>
         <div className="card">
           <span className="muted">Saídas registradas</span>
-          <h2>{money(expenseTotal + materialPurchasesTotal)}</h2>
+          <h2>{money(paidExpenseTotal + materialPurchasesTotal)}</h2>
+          <small className="muted">Despesas pagas + compras de material</small>
         </div>
         <div className="card">
           <span className="muted">Despesas em aberto</span>
@@ -85,7 +85,7 @@ export default async function GastosPage() {
             content: (
               <div className="grid two-col">
                 <CreateExpenseForm />
-                <ExpenseList expenses={(expenses ?? []) as any} />
+                <ExpenseList expenses={(expenses ?? []) as Expense[]} />
               </div>
             ),
           },

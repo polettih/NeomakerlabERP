@@ -1,10 +1,16 @@
 "use client";
-import { FormEvent, useState } from "react";
+import { FormEvent, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EXPENSE_CATEGORIES } from "@/lib/expense-categories";
+import { errorMessage } from "@/lib/errors";
 
 export function CreateExpenseForm() {
   const r = useRouter();
+  const descId = useId();
+  const catId = useId();
+  const amountId = useId();
+  const dueDateId = useId();
+  const paidId = useId();
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
@@ -37,8 +43,8 @@ export function CreateExpenseForm() {
       setDueDate("");
       setPaid(false);
       r.refresh();
-    } catch (err: any) {
-      setError(err.message || "Erro");
+    } catch (err) {
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -47,10 +53,15 @@ export function CreateExpenseForm() {
   return (
     <form onSubmit={submit} className="card grid">
       <h2>Nova despesa</h2>
-      {error && <div className="error">{error}</div>}
+      {error && (
+        <div className="error" role="alert">
+          {error}
+        </div>
+      )}
       <div className="field">
-        <label>Descrição</label>
+        <label htmlFor={descId}>Descrição</label>
         <input
+          id={descId}
           className="input"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -58,8 +69,8 @@ export function CreateExpenseForm() {
         />
       </div>
       <div className="field">
-        <label>Categoria</label>
-        <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
+        <label htmlFor={catId}>Categoria</label>
+        <select id={catId} className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">Sem categoria</option>
           {EXPENSE_CATEGORIES.map((c) => (
             <option key={c} value={c}>
@@ -69,8 +80,9 @@ export function CreateExpenseForm() {
         </select>
       </div>
       <div className="field">
-        <label>Valor</label>
+        <label htmlFor={amountId}>Valor</label>
         <input
+          id={amountId}
           className="input"
           type="number"
           step="0.01"
@@ -81,8 +93,9 @@ export function CreateExpenseForm() {
         />
       </div>
       <div className="field">
-        <label>Vencimento</label>
+        <label htmlFor={dueDateId}>Vencimento</label>
         <input
+          id={dueDateId}
           className="input"
           type="date"
           value={dueDate}
@@ -91,12 +104,12 @@ export function CreateExpenseForm() {
       </div>
       <div className="field" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <input
-          id="paid-now"
+          id={paidId}
           type="checkbox"
           checked={paid}
           onChange={(e) => setPaid(e.target.checked)}
         />
-        <label htmlFor="paid-now" style={{ marginBottom: 0 }}>
+        <label htmlFor={paidId} style={{ marginBottom: 0 }}>
           Já foi paga
         </label>
       </div>

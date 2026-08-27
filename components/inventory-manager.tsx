@@ -1,6 +1,8 @@
 "use client";
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { money, n } from "@/lib/format";
+import { errorMessage } from "@/lib/errors";
 type Material = {
   id: string;
   name: string;
@@ -15,7 +17,6 @@ type Material = {
   color_hex?: string;
   active?: boolean;
 };
-const money = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const typeUnit = (t: string) => (t === "Filamento" ? "g" : t === "Resina" ? "ml" : "un");
 export function InventoryManager({ materials }: { materials: Material[] }) {
   const r = useRouter();
@@ -82,7 +83,7 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
     setForm(empty);
     setError("");
   }
-  async function send(url: string, method: string, body: any) {
+  async function send(url: string, method: string, body: Record<string, unknown>) {
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -103,8 +104,8 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
       );
       cancelEdit();
       r.refresh();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errorMessage(e));
     }
   }
   async function remove(m: Material) {
@@ -117,8 +118,8 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
     try {
       await send("/api/materials", "DELETE", { id: m.id });
       r.refresh();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errorMessage(e));
     }
   }
   async function buy(e: FormEvent) {
@@ -128,8 +129,8 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
       await send("/api/material-purchases", "POST", purchase);
       setPurchase({ ...purchase, quantity: "", total_cost: "", notes: "" });
       r.refresh();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errorMessage(e));
     }
   }
   async function consume(e: FormEvent) {
@@ -143,8 +144,8 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
       });
       setUse({ ...use, quantity: "", description: "" });
       r.refresh();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errorMessage(e));
     }
   }
   const selected = materials.find((m) => m.id === purchase.material_id);
@@ -337,7 +338,7 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
             <p className="muted">
               Custo:{" "}
               {purchase.quantity && purchase.total_cost
-                ? money(Number(purchase.total_cost) / Number(purchase.quantity))
+                ? money(n(purchase.total_cost) / n(purchase.quantity))
                 : `R$ 0,00`}
               /{selected?.unit || "un"}
             </p>
@@ -436,18 +437,18 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
                   )}
                 </td>
                 <td>
-                  {Number(m.quantity_on_hand).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}{" "}
+                  {n(m.quantity_on_hand).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}{" "}
                   {m.unit}
                 </td>
                 <td>
-                  {money(Number(m.average_cost))}/{m.unit}
+                  {money(n(m.average_cost))}/{m.unit}
                 </td>
-                <td>{money(Number(m.quantity_on_hand) * Number(m.average_cost))}</td>
+                <td>{money(n(m.quantity_on_hand) * n(m.average_cost))}</td>
                 <td>
                   <span
-                    className={`badge ${Number(m.quantity_on_hand) <= Number(m.minimum_stock) ? "yellow" : "green"}`}
+                    className={`badge ${n(m.quantity_on_hand) <= n(m.minimum_stock) ? "yellow" : "green"}`}
                   >
-                    {Number(m.quantity_on_hand) <= Number(m.minimum_stock) ? "Baixo" : "Normal"}
+                    {n(m.quantity_on_hand) <= n(m.minimum_stock) ? "Baixo" : "Normal"}
                   </span>
                 </td>
                 <td>
