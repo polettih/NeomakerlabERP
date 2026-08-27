@@ -1,0 +1,619 @@
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..8766277
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,34 @@
++# dependencies
++/node_modules
++/.pnp
++.pnp.js
++
++# testing
++/coverage
++
++# next.js
++/.next/
++/out/
++
++# production
++/build
++
++# misc
++.DS_Store
++*.pem
++
++# debug
++npm-debug.log*
++yarn-debug.log*
++yarn-error.log*
++
++# local env files — NEVER commit real Supabase keys/secrets
++.env
++.env*.local
++
++# vercel
++.vercel
++
++# typescript
++*.tsbuildinfo
++next-env.d.ts
+diff --git a/app/(app)/pedidos/page.tsx b/app/(app)/pedidos/page.tsx
+index 63af85b..5cdd923 100644
+--- a/app/(app)/pedidos/page.tsx
++++ b/app/(app)/pedidos/page.tsx
+@@ -1,8 +1,7 @@
+ import { requireUser } from "@/lib/auth";
+ import Link from "next/link";
+-import { OrderStatusActions } from "@/components/order-status-actions";
+-import { OrderDeleteButton } from "@/components/order-delete-button";
+-const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
++import { OrderTable } from "@/components/order-table";
++
+ export default async function PedidosPage() {
+   const { supabase } = await requireUser();
+   const { data } = await supabase
+@@ -22,55 +21,7 @@ export default async function PedidosPage() {
+           + Novo pedido
+         </Link>
+       </div>
+-      <div className="table-wrap">
+-        <table>
+-          <thead>
+-            <tr>
+-              <th>Data</th>
+-              <th>Cliente</th>
+-              <th>Canal</th>
+-              <th>Prazo</th>
+-              <th>Conclusão</th>
+-              <th>Status</th>
+-              <th>Pagamento</th>
+-              <th>Venda bruta</th>
+-              <th>Ações</th>
+-            </tr>
+-          </thead>
+-          <tbody>
+-            {(data ?? []).map((o: any) => (
+-              <tr key={o.id}>
+-                <td>{new Date(o.order_date).toLocaleDateString("pt-BR")}</td>
+-                <td>{o.customers?.name || "—"}</td>
+-                <td>{o.sales_channels?.name || "—"}</td>
+-                <td>
+-                  {o.expected_date ? new Date(o.expected_date).toLocaleDateString("pt-BR") : "—"}
+-                </td>
+-                <td>
+-                  {o.completed_at ? new Date(o.completed_at).toLocaleDateString("pt-BR") : "—"}
+-                </td>
+-                <td>
+-                  <OrderStatusActions id={o.id} status={o.status} />
+-                </td>
+-                <td>
+-                  <span className="badge">{o.payment_status}</span>
+-                </td>
+-                <td>{money(Number(o.gross_total ?? o.total))}</td>
+-                <td>
+-                  <OrderDeleteButton id={o.id} />
+-                </td>
+-              </tr>
+-            ))}
+-            {!data?.length && (
+-              <tr>
+-                <td colSpan={9} className="muted">
+-                  Nenhum pedido cadastrado.
+-                </td>
+-              </tr>
+-            )}
+-          </tbody>
+-        </table>
+-      </div>
++      <OrderTable orders={(data ?? []) as any} />
+     </div>
+   );
+ }
+diff --git a/app/(app)/produtos/page.tsx b/app/(app)/produtos/page.tsx
+index 53d1ab9..cd5eb1b 100644
+--- a/app/(app)/produtos/page.tsx
++++ b/app/(app)/produtos/page.tsx
+@@ -1,8 +1,7 @@
+ import { requireUser } from "@/lib/auth";
+ import { CreateProductForm } from "@/components/create-product-form";
+-import { ProductActions } from "@/components/product-actions";
+-import { ProductEditor } from "@/components/product-editor";
+-const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
++import { ProductTable } from "@/components/product-table";
++
+ export default async function ProdutosPage() {
+   const { supabase, organizationId } = await requireUser();
+   const [{ data }, { data: materials }, { data: machines }, { data: settings }] = await Promise.all(
+@@ -48,75 +47,13 @@ export default async function ProdutosPage() {
+         laborHourRate={Number(settings?.labor_hour_rate ?? 30)}
+         energyCostKwh={Number(settings?.energy_cost_kwh ?? 1.12)}
+       />
+-      <div className="table-wrap">
+-        <table>
+-          <thead>
+-            <tr>
+-              <th>Produto</th>
+-              <th>Categoria</th>
+-              <th>Status</th>
+-              <th>Preço</th>
+-              <th>Custo</th>
+-              <th>Margem</th>
+-              <th>Ações</th>
+-            </tr>
+-          </thead>
+-          <tbody>
+-            {(data ?? []).map((p: any) => {
+-              const imgs = [...(p.product_images ?? [])].sort(
+-                (a: any, b: any) => a.sort_order - b.sort_order
+-              );
+-              const main = imgs[0]?.public_url;
+-              return (
+-                <tr key={p.id}>
+-                  <td>
+-                    <div className="product-name-cell">
+-                      {main ? (
+-                        <img className="product-thumb" src={main} alt="" />
+-                      ) : (
+-                        <div className="product-thumb product-thumb-empty">📦</div>
+-                      )}
+-                      <div>
+-                        <strong>{p.name}</strong>
+-                        {p.sku && <div className="muted">SKU: {p.sku}</div>}
+-                        <div className="muted">{imgs.length}/8 fotos</div>
+-                      </div>
+-                    </div>
+-                  </td>
+-                  <td>{p.category || "Bonecos"}</td>
+-                  <td>
+-                    <span className={`badge ${p.active ? "green" : "yellow"}`}>
+-                      {p.active ? "Disponível" : "Inativo"}
+-                    </span>
+-                  </td>
+-                  <td>{money(Number(p.sale_price))}</td>
+-                  <td>{money(Number(p.estimated_cost))}</td>
+-                  <td>{money(Number(p.sale_price) - Number(p.estimated_cost))}</td>
+-                  <td>
+-                    <div className="actions">
+-                      <ProductEditor
+-                        product={{ ...p, images: imgs }}
+-                        materials={materials ?? []}
+-                        machines={machines ?? []}
+-                        laborHourRate={Number(settings?.labor_hour_rate ?? 30)}
+-                        energyCostKwh={Number(settings?.energy_cost_kwh ?? 1.12)}
+-                      />
+-                      <ProductActions id={p.id} active={p.active} />
+-                    </div>
+-                  </td>
+-                </tr>
+-              );
+-            })}
+-            {!data?.length && (
+-              <tr>
+-                <td colSpan={7} className="muted">
+-                  Nenhum produto cadastrado.
+-                </td>
+-              </tr>
+-            )}
+-          </tbody>
+-        </table>
+-      </div>
++      <ProductTable
++        products={(data ?? []) as any}
++        materials={materials ?? []}
++        machines={machines ?? []}
++        laborHourRate={Number(settings?.labor_hour_rate ?? 30)}
++        energyCostKwh={Number(settings?.energy_cost_kwh ?? 1.12)}
++      />
+     </div>
+   );
+ }
+diff --git a/app/globals.css b/app/globals.css
+index 8f859ec..f5417ca 100644
+--- a/app/globals.css
++++ b/app/globals.css
+@@ -21,6 +21,8 @@ table{width:100%;border-collapse:collapse}th,td{padding:13px 15px;text-align:lef
+ th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}tr:last-child td{border-bottom:0}
+ .badge{display:inline-flex;padding:5px 9px;border-radius:999px;background:#252b33;color:#d8dee7;font-size:12px;font-weight:700}
+ .badge.green{background:#0d2d1a;color:#86efac}.badge.yellow{background:#3a2c06;color:#fde68a}
++.list-filters{flex-wrap:wrap;gap:12px}.filters-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.filters-row .input,.filters-row .select{width:auto;min-width:150px}
++@media(max-width:700px){.filters-row{width:100%}.filters-row .input,.filters-row .select{min-width:0;flex:1 1 140px}}
+ .error{background:#3b1111;border:1px solid #6f1d1d;color:#fecaca;border-radius:8px;padding:10px}
+ .success{background:#0d2d1a;border:1px solid #1c6a3a;color:#bbf7d0;border-radius:8px;padding:10px}
+ .login-page{min-height:100vh;display:grid;place-items:center;padding:20px}.login-card{width:min(420px,100%);background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:28px}
+diff --git a/components/order-table.tsx b/components/order-table.tsx
+new file mode 100644
+index 0000000..f87fa47
+--- /dev/null
++++ b/components/order-table.tsx
+@@ -0,0 +1,158 @@
++"use client";
++import { useMemo, useState } from "react";
++import { OrderStatusActions } from "@/components/order-status-actions";
++import { OrderDeleteButton } from "@/components/order-delete-button";
++
++const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
++const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
++
++type Order = {
++  id: string;
++  status: string;
++  payment_status: string;
++  total: number;
++  gross_total: number | null;
++  order_date: string;
++  expected_date: string | null;
++  completed_at: string | null;
++  customers: { name: string } | null;
++  sales_channels: { name: string } | null;
++};
++
++const STATUS_LABEL: Record<string, string> = {
++  pending: "Pendente",
++  in_production: "Em produção",
++  ready: "Pronto",
++  shipped: "Enviado",
++  delivered: "Finalizado",
++  cancelled: "Cancelado",
++};
++
++export function OrderTable({ orders }: { orders: Order[] }) {
++  const [q, setQ] = useState("");
++  const [status, setStatus] = useState("all");
++  const [payment, setPayment] = useState("all");
++  const [from, setFrom] = useState("");
++  const [to, setTo] = useState("");
++
++  const statuses = useMemo(
++    () => Array.from(new Set(orders.map((o) => o.status))),
++    [orders]
++  );
++  const payments = useMemo(
++    () => Array.from(new Set(orders.map((o) => o.payment_status))),
++    [orders]
++  );
++
++  const filtered = useMemo(() => {
++    const term = q.trim().toLowerCase();
++    return orders.filter((o) => {
++      if (status !== "all" && o.status !== status) return false;
++      if (payment !== "all" && o.payment_status !== payment) return false;
++      if (from && o.order_date < from) return false;
++      if (to && o.order_date > to) return false;
++      if (!term) return true;
++      return (
++        (o.customers?.name ?? "").toLowerCase().includes(term) ||
++        (o.sales_channels?.name ?? "").toLowerCase().includes(term)
++      );
++    });
++  }, [orders, q, status, payment, from, to]);
++
++  return (
++    <>
++      <div className="section-title list-filters">
++        <div>
++          <p className="muted">
++            {filtered.length} de {orders.length} pedido{orders.length === 1 ? "" : "s"}
++          </p>
++        </div>
++        <div className="filters-row">
++          <input
++            className="input"
++            placeholder="Buscar por cliente ou canal"
++            value={q}
++            onChange={(e) => setQ(e.target.value)}
++          />
++          <select className="select" value={status} onChange={(e) => setStatus(e.target.value)}>
++            <option value="all">Todos os status</option>
++            {statuses.map((s) => (
++              <option key={s} value={s}>
++                {STATUS_LABEL[s] ?? s}
++              </option>
++            ))}
++          </select>
++          <select className="select" value={payment} onChange={(e) => setPayment(e.target.value)}>
++            <option value="all">Todo pagamento</option>
++            {payments.map((p) => (
++              <option key={p} value={p}>
++                {p}
++              </option>
++            ))}
++          </select>
++          <input
++            className="input"
++            type="date"
++            value={from}
++            onChange={(e) => setFrom(e.target.value)}
++            title="De"
++          />
++          <input
++            className="input"
++            type="date"
++            value={to}
++            onChange={(e) => setTo(e.target.value)}
++            title="Até"
++          />
++        </div>
++      </div>
++      <div className="table-wrap">
++        <table>
++          <thead>
++            <tr>
++              <th>Data</th>
++              <th>Cliente</th>
++              <th>Canal</th>
++              <th>Prazo</th>
++              <th>Conclusão</th>
++              <th>Status</th>
++              <th>Pagamento</th>
++              <th>Venda bruta</th>
++              <th>Ações</th>
++            </tr>
++          </thead>
++          <tbody>
++            {filtered.map((o) => (
++              <tr key={o.id}>
++                <td>{fmt(o.order_date)}</td>
++                <td>{o.customers?.name || "—"}</td>
++                <td>{o.sales_channels?.name || "—"}</td>
++                <td>{fmt(o.expected_date)}</td>
++                <td>{fmt(o.completed_at)}</td>
++                <td>
++                  <OrderStatusActions id={o.id} status={o.status} />
++                </td>
++                <td>
++                  <span className="badge">{o.payment_status}</span>
++                </td>
++                <td>{money(Number(o.gross_total ?? o.total))}</td>
++                <td>
++                  <OrderDeleteButton id={o.id} />
++                </td>
++              </tr>
++            ))}
++            {!filtered.length && (
++              <tr>
++                <td colSpan={9} className="muted">
++                  {orders.length
++                    ? "Nenhum pedido encontrado com esses filtros."
++                    : "Nenhum pedido cadastrado."}
++                </td>
++              </tr>
++            )}
++          </tbody>
++        </table>
++      </div>
++    </>
++  );
++}
+diff --git a/components/product-table.tsx b/components/product-table.tsx
+new file mode 100644
+index 0000000..9b97dd0
+--- /dev/null
++++ b/components/product-table.tsx
+@@ -0,0 +1,161 @@
++"use client";
++import { useMemo, useState } from "react";
++import { ProductActions } from "@/components/product-actions";
++import { ProductEditor } from "@/components/product-editor";
++
++const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
++
++type Img = { id: string; public_url: string; storage_path: string; sort_order: number };
++type Product = {
++  id: string;
++  name: string;
++  sku: string | null;
++  sale_price: number;
++  estimated_cost: number;
++  active: boolean;
++  category: string | null;
++  created_at: string;
++  product_images: Img[] | null;
++};
++
++export function ProductTable({
++  products,
++  materials,
++  machines,
++  laborHourRate,
++  energyCostKwh,
++}: {
++  products: Product[];
++  materials: any[];
++  machines: any[];
++  laborHourRate: number;
++  energyCostKwh: number;
++}) {
++  const [q, setQ] = useState("");
++  const [category, setCategory] = useState("Todas");
++  const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
++
++  const categories = useMemo(
++    () => ["Todas", ...Array.from(new Set(products.map((p) => p.category || "Bonecos")))],
++    [products]
++  );
++
++  const filtered = useMemo(() => {
++    const term = q.trim().toLowerCase();
++    return products.filter((p) => {
++      if (status === "active" && !p.active) return false;
++      if (status === "inactive" && p.active) return false;
++      if (category !== "Todas" && (p.category || "Bonecos") !== category) return false;
++      if (!term) return true;
++      return (
++        p.name.toLowerCase().includes(term) || (p.sku ?? "").toLowerCase().includes(term)
++      );
++    });
++  }, [products, q, category, status]);
++
++  return (
++    <div className="table-wrap">
++      <div className="section-title list-filters">
++        <div>
++          <h2>Catálogo</h2>
++          <p className="muted">
++            {filtered.length} de {products.length} produto{products.length === 1 ? "" : "s"}
++          </p>
++        </div>
++        <div className="filters-row">
++          <input
++            className="input"
++            placeholder="Buscar por nome ou SKU"
++            value={q}
++            onChange={(e) => setQ(e.target.value)}
++          />
++          <select className="select" value={category} onChange={(e) => setCategory(e.target.value)}>
++            {categories.map((c) => (
++              <option key={c} value={c}>
++                {c}
++              </option>
++            ))}
++          </select>
++          <select
++            className="select"
++            value={status}
++            onChange={(e) => setStatus(e.target.value as any)}
++          >
++            <option value="all">Todos os status</option>
++            <option value="active">Disponíveis</option>
++            <option value="inactive">Inativos</option>
++          </select>
++        </div>
++      </div>
++      <table>
++        <thead>
++          <tr>
++            <th>Produto</th>
++            <th>Categoria</th>
++            <th>Status</th>
++            <th>Preço</th>
++            <th>Custo</th>
++            <th>Margem</th>
++            <th>Ações</th>
++          </tr>
++        </thead>
++        <tbody>
++          {filtered.map((p) => {
++            const imgs = [...(p.product_images ?? [])].sort(
++              (a, b) => a.sort_order - b.sort_order
++            );
++            const main = imgs[0]?.public_url;
++            return (
++              <tr key={p.id}>
++                <td>
++                  <div className="product-name-cell">
++                    {main ? (
++                      <img className="product-thumb" src={main} alt="" />
++                    ) : (
++                      <div className="product-thumb product-thumb-empty">📦</div>
++                    )}
++                    <div>
++                      <strong>{p.name}</strong>
++                      {p.sku && <div className="muted">SKU: {p.sku}</div>}
++                      <div className="muted">{imgs.length}/8 fotos</div>
++                    </div>
++                  </div>
++                </td>
++                <td>{p.category || "Bonecos"}</td>
++                <td>
++                  <span className={`badge ${p.active ? "green" : "yellow"}`}>
++                    {p.active ? "Disponível" : "Inativo"}
++                  </span>
++                </td>
++                <td>{money(Number(p.sale_price))}</td>
++                <td>{money(Number(p.estimated_cost))}</td>
++                <td>{money(Number(p.sale_price) - Number(p.estimated_cost))}</td>
++                <td>
++                  <div className="actions">
++                    <ProductEditor
++                      product={{ ...p, category: p.category || "Bonecos", images: imgs }}
++                      materials={materials}
++                      machines={machines}
++                      laborHourRate={laborHourRate}
++                      energyCostKwh={energyCostKwh}
++                    />
++                    <ProductActions id={p.id} active={p.active} />
++                  </div>
++                </td>
++              </tr>
++            );
++          })}
++          {!filtered.length && (
++            <tr>
++              <td colSpan={7} className="muted">
++                {products.length
++                  ? "Nenhum produto encontrado com esses filtros."
++                  : "Nenhum produto cadastrado."}
++              </td>
++            </tr>
++          )}
++        </tbody>
++      </table>
++    </div>
++  );
++}
+diff --git a/middleware.ts b/middleware.ts
+new file mode 100644
+index 0000000..f73abd8
+--- /dev/null
++++ b/middleware.ts
+@@ -0,0 +1,20 @@
++import type { NextRequest } from "next/server";
++import { updateSession } from "@/lib/supabase/proxy";
++
++// Runs on every request (see matcher below). Keeps the Supabase auth session
++// cookie refreshed and enforces the login/redirect rules in
++// lib/supabase/proxy.ts. Previously this logic lived in a root-level
++// `proxy.ts` file that Next.js never executed, because middleware must be a
++// file literally named `middleware.ts` at the project root — so sessions
++// were never refreshed proactively and could expire unexpectedly.
++export async function middleware(request: NextRequest) {
++  return updateSession(request);
++}
++
++export const config = {
++  matcher: [
++    // Skip static files, images and the PWA manifest/service worker so the
++    // middleware only runs for actual pages/API routes.
++    "/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
++  ],
++};
+diff --git a/product-editor.tsx b/product-editor.tsx
+deleted file mode 100644
+index bc15a9e..0000000
+--- a/product-editor.tsx
++++ /dev/null
+@@ -1,16 +0,0 @@
+-"use client";
+-import {useMemo,useRef,useState,type ReactNode} from 'react'; import {useRouter} from 'next/navigation'; import {createClient} from '@/lib/supabase/client';
+-const cats=['Bonecos','Objetos','Miniaturas','Decoração','Outros']; const money=(n:number)=>n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); const weight=(u:string)=>['kg','g','grama','gramas'].includes((u||'').toLowerCase()); const costOf=(m:any,q:number)=>{if(!m)return 0;return (m.unit||'').toLowerCase()==='kg'?q/1000*Number(m.average_cost||0):q*Number(m.average_cost||0)};
+-type Img={id:string;public_url:string;storage_path:string;sort_order:number}; type Product={id:string;name:string;sale_price:number;estimated_cost:number;category:string;images:Img[]}; type Material={id:string;name:string;category:string;unit:string;average_cost:number;material_type?:string;color_name?:string;color_hex?:string}; type Machine={id:string;name:string;category:string;power_kw:number;depreciation_per_hour:number;active:boolean};
+-export function ProductEditor({product,materials,machines,laborHourRate,energyCostKwh}:{product:Product;materials:Material[];machines:Machine[];laborHourRate:number;energyCostKwh:number}){
+- const r=useRouter();const ref=useRef<HTMLInputElement>(null);const [open,setOpen]=useState(false),[busy,setBusy]=useState(false),[loading,setLoading]=useState(false),[error,setError]=useState('');const [name,setName]=useState(product.name),[category,setCategory]=useState(product.category||'Bonecos'),[price,setPrice]=useState(String(product.sale_price)),[images,setImages]=useState(product.images||[]);const [fdmEnabled,setFdmEnabled]=useState(false),[resinEnabled,setResinEnabled]=useState(false),[fdmMachineId,setFdmMachineId]=useState(''),[resinMachineId,setResinMachineId]=useState(''),[fdmHours,setFdmHours]=useState('0'),[resinHours,setResinHours]=useState('0'),[fdmMaterialId,setFdmMaterialId]=useState(''),[resinMaterialId,setResinMaterialId]=useState(''),[fdmQty,setFdmQty]=useState('0'),[resinQty,setResinQty]=useState('0'),[extraLinks,setExtraLinks]=useState<any[]>([]),[paintingHours,setPaintingHours]=useState('0'),[finishingHours,setFinishingHours]=useState('0'),[paintingMaterials,setPaintingMaterials]=useState('0'),[packagingCost,setPackagingCost]=useState('0'),[otherCost,setOtherCost]=useState('0'),[lossPercent,setLossPercent]=useState('8'),[marginPercent,setMarginPercent]=useState('20');
+- const fdmMachines=machines.filter(m=>m.category==='Impressora FDM'&&m.active),resinMachines=machines.filter(m=>m.category==='Impressora Resina'&&m.active); const fdmMaterials=materials.filter(m=>m.material_type==='Filamento'); const resinMaterials=materials.filter(m=>m.material_type==='Resina');const fdmMaterial=materials.find(m=>m.id===fdmMaterialId),resinMaterial=materials.find(m=>m.id===resinMaterialId),fdmMachine=fdmMachines.find(m=>m.id===fdmMachineId),resinMachine=resinMachines.find(m=>m.id===resinMachineId);
+- const fdmCost=fdmEnabled?costOf(fdmMaterial,Number(fdmQty||0)):0,resinCost=resinEnabled?costOf(resinMaterial,Number(resinQty||0)):0,extraCost=extraLinks.filter(x=>x.usage_type==='other').reduce((s,x)=>s+costOf(materials.find(m=>m.id===x.material_id),Number((x.displayQty ?? x.quantity) || 0)),0),materialCost=fdmCost+resinCost+extraCost,waste=materialCost*Number(lossPercent||0)/100,energyCost=((fdmEnabled?Number(fdmHours)*Number(fdmMachine?.power_kw||0):0)+(resinEnabled?Number(resinHours)*Number(resinMachine?.power_kw||0):0))*energyCostKwh,depreciation=(fdmEnabled?Number(fdmHours)*Number(fdmMachine?.depreciation_per_hour||0):0)+(resinEnabled?Number(resinHours)*Number(resinMachine?.depreciation_per_hour||0):0),labor=(Number(paintingHours)+Number(finishingHours))*laborHourRate,extras=Number(paintingMaterials)+Number(packagingCost)+Number(otherCost),total=materialCost+waste+energyCost+depreciation+labor+extras,suggested=total*(1+Number(marginPercent||0)/100),profit=suggested-total;
+- async function openEditor(){setOpen(true);setLoading(true);setError('');try{const [pr,pm]=await Promise.all([fetch(`/api/product-pricing?product_id=${product.id}`),fetch(`/api/product-materials?product_id=${product.id}`)]);const pricing=await pr.json(),links=await pm.json();if(!pr.ok)throw new Error(pricing.error);if(!pm.ok)throw new Error(links.error);const f=links.find((x:any)=>x.usage_type==='fdm'),res=links.find((x:any)=>x.usage_type==='resin');setFdmEnabled(!!f||!!pricing?.fdm_machine_id);setResinEnabled(!!res||!!pricing?.resin_machine_id);setFdmMachineId(pricing?.fdm_machine_id||'');setResinMachineId(pricing?.resin_machine_id||'');setFdmMaterialId(pricing?.fdm_material_id||f?.material_id||'');setResinMaterialId(pricing?.resin_material_id||res?.material_id||'');setFdmHours(String(pricing?.filament_hours??0));setResinHours(String(pricing?.resin_hours??0));const toDisplay=(x:any)=>{const m=materials.find((a:any)=>a.id===x.material_id);return m?.unit?.toLowerCase()==='kg'?Number(x.quantity)*1000:Number(x.quantity)};setFdmQty(String(f?toDisplay(f):0));setResinQty(String(res?toDisplay(res):0));setExtraLinks(links.filter((x:any)=>!['fdm','resin'].includes(x.usage_type)).map((x:any)=>({...x,displayQty:toDisplay(x)})));setPaintingHours(String(pricing?.painting_hours??0));setFinishingHours(String(pricing?.finishing_hours??0));setPaintingMaterials(String(pricing?.painting_materials??0));setPackagingCost(String(pricing?.packaging_cost??0));setOtherCost(String(pricing?.other_cost??0));setLossPercent(String(Number(pricing?.loss_percent??0)*100));setMarginPercent(String(Number(pricing?.margin_percent??0)*100));setPrice(String(product.sale_price))}catch(e:any){setError(e.message||'Erro ao carregar produto.')}finally{setLoading(false)}}
+- async function save(){setBusy(true);setError('');try{if(!fdmEnabled&&!resinEnabled)throw new Error('Selecione FDM, resina ou ambos.');if(fdmEnabled&&(!fdmMachineId||!fdmMaterialId||Number(fdmHours)<=0||Number(fdmQty)<=0))throw new Error('Preencha máquina, horas e material da FDM.');if(resinEnabled&&(!resinMachineId||!resinMaterialId||Number(resinHours)<=0||Number(resinQty)<=0))throw new Error('Preencha impressora, horas e resina.');const res=await fetch(`/api/products/${product.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,sale_price:suggested,estimated_cost:total,category})});const j=await res.json();if(!res.ok)throw new Error(j.error);const del=await fetch('/api/product-materials/bulk',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({product_id:product.id})});if(!del.ok)throw new Error('Não foi possível atualizar os materiais do produto.');const links:any[]=[];if(fdmEnabled)links.push({material_id:fdmMaterialId,quantity:Number(fdmQty)/((fdmMaterial?.unit||'').toLowerCase()==='kg'?1000:1),usage_type:'fdm'});if(resinEnabled)links.push({material_id:resinMaterialId,quantity:Number(resinQty)/((resinMaterial?.unit||'').toLowerCase()==='kg'?1000:1),usage_type:'resin'});for(const x of extraLinks){const m=materials.find(a=>a.id===x.material_id);links.push({material_id:x.material_id,quantity:Number((x.displayQty ?? x.quantity) || 0)/((m?.unit||'').toLowerCase()==='kg'?1000:1),usage_type:'other'})}for(const x of links){const rr=await fetch('/api/product-materials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({product_id:product.id,...x})});if(!rr.ok)throw new Error((await rr.json()).error||'Erro ao salvar material.')}const pricing={product_id:product.id,fdm_machine_id:fdmEnabled?fdmMachineId:null,resin_machine_id:resinEnabled?resinMachineId:null,fdm_material_id:fdmEnabled?fdmMaterialId:null,resin_material_id:resinEnabled?resinMaterialId:null,filament_hours:fdmEnabled?Number(fdmHours):0,resin_hours:resinEnabled?Number(resinHours):0,painting_hours:Number(paintingHours),finishing_hours:Number(finishingHours),painting_materials:Number(paintingMaterials),packaging_cost:Number(packagingCost),other_cost:Number(otherCost),energy_cost_kwh:energyCostKwh,filament_power_kw:fdmEnabled?Number(fdmMachine?.power_kw||0):0,resin_power_kw:resinEnabled?Number(resinMachine?.power_kw||0):0,filament_depr_hour:fdmEnabled?Number(fdmMachine?.depreciation_per_hour||0):0,resin_depr_hour:resinEnabled?Number(resinMachine?.depreciation_per_hour||0):0,loss_percent:Number(lossPercent)/100,margin_percent:Number(marginPercent)/100,marketplace_commission:0,material_cost:materialCost,energy_cost:energyCost,depreciation_cost:depreciation,labor_cost:labor,waste_cost:waste,total_cost:total,suggested_price:suggested,net_after_commission:suggested,profit};const pp=await fetch('/api/product-pricing',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pricing)});if(!pp.ok)throw new Error((await pp.json()).error||'Erro ao salvar precificação.');setOpen(false);r.refresh()}catch(e:any){setError(e.message||'Erro')}finally{setBusy(false)}}
+- async function upload(files:FileList|null){if(!files?.length)return;if(images.length+files.length>8){setError('Máximo de 8 fotos.');return}setBusy(true);try{const sb=createClient();const {data:{user}}=await sb.auth.getUser();if(!user)throw new Error('Sessão expirada.');const paths=[];for(let i=0;i<files.length;i++){const f=files[i],ext=f.name.split('.').pop()?.toLowerCase()||'jpg',path=`${user.id}/${product.id}/${crypto.randomUUID()}.${ext}`;const up=await sb.storage.from('product-images').upload(path,f,{upsert:false,contentType:f.type});if(up.error)throw up.error;const {data:url}=sb.storage.from('product-images').getPublicUrl(path);paths.push({product_id:product.id,storage_path:path,public_url:url.publicUrl,sort_order:images.length+i})}const ins=await sb.from('product_images').insert(paths).select('id,public_url,storage_path,sort_order');if(ins.error)throw ins.error;setImages([...images,...(ins.data as Img[])])}catch(e:any){setError(e.message||'Erro')}finally{setBusy(false)}}
+- async function remove(img:Img){if(!confirm('Remover esta foto?'))return;setBusy(true);try{const res=await fetch(`/api/product-images/${img.id}`,{method:'DELETE'});const j=await res.json();if(!res.ok)throw new Error(j.error||'Erro');setImages(images.filter(x=>x.id!==img.id))}catch(e:any){setError(e.message)}finally{setBusy(false)}}
+- return <><button className="btn btn-secondary btn-sm" onClick={openEditor}>Editar</button>{open&&<div className="modal-backdrop"><div className="modal card"><div className="section-title"><div><h2>Editar produto</h2><p className="muted">Alterações valem para novas produções e novos pedidos. Pedidos já lançados mantêm o custo/preço histórico.</p></div><button className="btn btn-secondary" onClick={()=>setOpen(false)}>Fechar</button></div>{error&&<div className="error">{error}</div>}{loading?<p>Carregando configuração...</p>:<><div className="form-grid"><Field label="Nome"><input className="input" value={name} onChange={e=>setName(e.target.value)}/></Field><Field label="Categoria"><select className="select" value={category} onChange={e=>setCategory(e.target.value)}>{cats.map(c=><option key={c}>{c}</option>)}</select></Field><Field label="Preço atual sugerido"><div className="input">{money(suggested)}</div></Field></div><div className="section-title"><h3>🖨️ FDM</h3><label className="check-row"><input type="checkbox" checked={fdmEnabled} onChange={e=>setFdmEnabled(e.target.checked)}/> Usar FDM</label></div>{fdmEnabled&&<div className="form-grid"><Field label="Máquina"><select className="select" value={fdmMachineId} onChange={e=>setFdmMachineId(e.target.value)}><option value="">Selecione</option>{fdmMachines.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}</select></Field><Field label="Horas"><input className="input" type="number" step="0.01" min="0" value={fdmHours} onChange={e=>setFdmHours(e.target.value)}/></Field><Field label="Material"><select className="select" value={fdmMaterialId} onChange={e=>setFdmMaterialId(e.target.value)}><option value="">Selecione</option>{fdmMaterials.map(m=><option key={m.id} value={m.id}>{m.name} {m.color_name?`— ${m.color_name}`:''} — {money(Number(m.average_cost))}/{m.unit}</option>)}</select></Field><Field label={'Quantidade (g)'}><input className="input" type="number" step="0.001" min="0" value={fdmQty} onChange={e=>setFdmQty(e.target.value)}/></Field></div>}{<div className="section-title"><h3>🧪 Resina</h3><label className="check-row"><input type="checkbox" checked={resinEnabled} onChange={e=>setResinEnabled(e.target.checked)}/> Usar resina</label></div>}{resinEnabled&&<div className="form-grid"><Field label="Impressora"><select className="select" value={resinMachineId} onChange={e=>setResinMachineId(e.target.value)}><option value="">Selecione</option>{resinMachines.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}</select></Field><Field label="Horas"><input className="input" type="number" step="0.01" min="0" value={resinHours} onChange={e=>setResinHours(e.target.value)}/></Field><Field label="Resina"><select className="select" value={resinMaterialId} onChange={e=>setResinMaterialId(e.target.value)}><option value="">Selecione</option>{resinMaterials.map(m=><option key={m.id} value={m.id}>{m.name} {m.color_name?`— ${m.color_name}`:''} — {money(Number(m.average_cost))}/{m.unit}</option>)}</select></Field><Field label={'Quantidade (ml)'}><input className="input" type="number" step="0.001" min="0" value={resinQty} onChange={e=>setResinQty(e.target.value)}/></Field></div>}
+- <div className="section-title"><h3>🎨 Pintura e acabamento</h3></div><div className="form-grid"><Field label="Horas de pintura"><input className="input" type="number" step="0.01" min="0" value={paintingHours} onChange={e=>setPaintingHours(e.target.value)}/></Field><Field label="Horas de acabamento"><input className="input" type="number" step="0.01" min="0" value={finishingHours} onChange={e=>setFinishingHours(e.target.value)}/></Field><Field label="Valor/hora"><div className="input">{money(laborHourRate)}</div></Field><Field label="Materiais de pintura"><input className="input" type="number" step="0.01" min="0" value={paintingMaterials} onChange={e=>setPaintingMaterials(e.target.value)}/></Field><Field label="Embalagem"><input className="input" type="number" step="0.01" min="0" value={packagingCost} onChange={e=>setPackagingCost(e.target.value)}/></Field><Field label="Outros custos"><input className="input" type="number" step="0.01" min="0" value={otherCost} onChange={e=>setOtherCost(e.target.value)}/></Field><Field label="Perda/refugo (%)"><input className="input" type="number" step="0.01" min="0" value={lossPercent} onChange={e=>setLossPercent(e.target.value)}/></Field><Field label="Margem desejada (%)"><input className="input" type="number" step="0.01" min="0" value={marginPercent} onChange={e=>setMarginPercent(e.target.value)}/></Field></div>
+- <div className="card"><h3>🧮 Resumo</h3><div className="form-grid"><p>Materiais<br/><b>{money(materialCost)}</b></p><p>Perdas<br/><b>{money(waste)}</b></p><p>Energia<br/><b>{money(energyCost)}</b></p><p>Depreciação<br/><b>{money(depreciation)}</b></p><p>Mão de obra<br/><b>{money(labor)}</b></p><p>Outros<br/><b>{money(extras)}</b></p><p><strong>Custo total</strong><br/><span className="value">{money(total)}</span></p><p><strong>Preço sugerido</strong><br/><span className="value">{money(suggested)}</span></p><p><strong>Lucro líquido estimado</strong><br/><span className="value">{money(profit)}</span></p></div></div><div className="section-title"><div><h3>📸 Fotos ({images.length}/8)</h3><p className="muted">A primeira foto continua sendo a principal.</p></div><button className="btn btn-secondary" disabled={busy||images.length>=8} onClick={()=>ref.current?.click()}>Adicionar fotos</button><input ref={ref} type="file" accept="image/*" multiple hidden onChange={e=>upload(e.target.files)}/></div><div className="photo-grid">{images.map((img,i)=><div className="photo-item" key={img.id}><img src={img.public_url} alt=""/><div className="photo-caption"><span className="badge">{i===0?'Principal':`#${i+1}`}</span><button className="btn btn-danger btn-sm" onClick={()=>remove(img)}>Remover</button></div></div>)}</div><div className="actions" style={{justifyContent:'flex-end',marginTop:18}}><button className="btn btn-secondary" onClick={()=>setOpen(false)}>Cancelar</button><button className="btn btn-primary" disabled={busy} onClick={save}>{busy?'Salvando...':'Salvar alterações'}</button></div></>}</div></div>}</>}
+-function Field({label,children}:{label:string;children:ReactNode}){return <div className="field"><label>{label}</label>{children}</div>}
+diff --git a/proxy.ts b/proxy.ts
+deleted file mode 100644
+index 495824b..0000000
+--- a/proxy.ts
++++ /dev/null
+@@ -1,10 +0,0 @@
+-import type { NextRequest } from "next/server";
+-import { updateSession } from "@/lib/supabase/proxy";
+-
+-export async function proxy(request: NextRequest) {
+-  return updateSession(request);
+-}
+-
+-export const config = {
+-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+-};
+\ No newline at end of file
