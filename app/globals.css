@@ -35,3 +35,36 @@ th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04
 
 .modal-backdrop{position:fixed;inset:0;background:#000b;display:grid;place-items:center;padding:20px;z-index:100}.modal{width:min(900px,100%);max-height:92vh;overflow:auto;box-shadow:0 25px 80px #000a}.product-name-cell{display:flex;align-items:center;gap:12px;min-width:240px}.product-thumb{width:52px;height:52px;border-radius:10px;object-fit:cover;border:1px solid var(--border);background:#0f1318}.product-thumb-empty{display:grid;place-items:center;font-size:22px}.photo-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.photo-item{border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--panel2)}.photo-item img{width:100%;aspect-ratio:1;object-fit:cover;display:block}.photo-caption{display:flex;align-items:center;justify-content:space-between;padding:8px;gap:6px}@media(max-width:800px){.photo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .product-preview{display:flex;align-items:center;gap:10px;margin-top:8px;padding:8px;border:1px solid var(--border);border-radius:10px;background:var(--panel2)}
+
+/* Page-level tab switcher (components/page-tabs.tsx) — lets long pages show
+   one section at a time instead of stacking everything vertically. */
+.page-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  margin: 18px 0 16px;
+}
+.page-tab {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 14px;
+  padding: 10px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.page-tab:hover {
+  color: var(--text, #e5e7eb);
+}
+.page-tab-active {
+  color: var(--text, #e5e7eb);
+  border-bottom-color: #6d5ef8;
+}
+.page-tab-panel {
+  display: grid;
+  gap: 18px;
+}

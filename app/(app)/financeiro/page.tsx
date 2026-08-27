@@ -5,6 +5,7 @@ import { FinancialHistory } from "@/components/financial-history";
 import { ExpenseList } from "@/components/expense-list";
 import { RecurringExpensesManager } from "@/components/recurring-expenses-manager";
 import { MonthlySummary } from "@/components/monthly-summary";
+import { PageTabs } from "@/components/page-tabs";
 import { ensureRecurringExpensesForCurrentMonth } from "@/lib/services/recurring-expenses";
 
 type Row = {
@@ -393,40 +394,63 @@ export default async function FinanceiroPage() {
         </div>
       </div>
 
-      <FinanceTabs
-        summary={{
-          qty: totalQty,
-          gross: totalGross,
-          received: totalReceived,
-          receivable: Math.max(totalGross - totalReceived, 0),
-          profit: operatingResult,
-        }}
-        rows={rows}
-        fees={{
-          total: totalFees,
-          count: validOrders.filter((o) => n(o.marketplace_fee) > 0).length,
-        }}
-        labor={{ total: totalLabor, items: totalLaborItems }}
-        spent={totalCashOut}
-        initialLaborHourRate={n(settings?.labor_hour_rate ?? 30)}
+      <PageTabs
+        defaultTab="categorias"
+        tabs={[
+          {
+            id: "categorias",
+            label: "Por categoria e canal",
+            content: (
+              <FinanceTabs
+                summary={{
+                  qty: totalQty,
+                  gross: totalGross,
+                  received: totalReceived,
+                  receivable: Math.max(totalGross - totalReceived, 0),
+                  profit: operatingResult,
+                }}
+                rows={rows}
+                fees={{
+                  total: totalFees,
+                  count: validOrders.filter((o) => n(o.marketplace_fee) > 0).length,
+                }}
+                labor={{ total: totalLabor, items: totalLaborItems }}
+                spent={totalCashOut}
+                initialLaborHourRate={n(settings?.labor_hour_rate ?? 30)}
+              />
+            ),
+          },
+          {
+            id: "historico",
+            label: "Histórico mensal",
+            content: (
+              <FinancialHistory
+                rows={historyRows}
+                totalPayable={payableTotal}
+                totalReceivable={Math.max(totalGross - totalReceived, 0)}
+                totalOutflow={initialOutflow}
+                totalGross={totalGross}
+                totalReceived={totalReceived}
+              />
+            ),
+          },
+          {
+            id: "gastos",
+            label: "Gastos e compras",
+            content: (
+              <div className="grid" style={{ gridTemplateColumns: "1fr 2fr" }}>
+                <CreateExpenseForm />
+                <ExpenseList expenses={(expenses ?? []) as Expense[]} />
+              </div>
+            ),
+          },
+          {
+            id: "recorrentes",
+            label: "Despesas recorrentes",
+            content: <RecurringExpensesManager items={recurringExpenses ?? []} />,
+          },
+        ]}
       />
-      <FinancialHistory
-        rows={historyRows}
-        totalPayable={payableTotal}
-        totalReceivable={Math.max(totalGross - totalReceived, 0)}
-        totalOutflow={initialOutflow}
-        totalGross={totalGross}
-        totalReceived={totalReceived}
-      />
-
-      <div className="grid" style={{ gridTemplateColumns: "1fr 2fr", marginTop: 18 }}>
-        <CreateExpenseForm />
-        <ExpenseList expenses={(expenses ?? []) as Expense[]} />
-      </div>
-
-      <div style={{ marginTop: 18 }}>
-        <RecurringExpensesManager items={recurringExpenses ?? []} />
-      </div>
     </div>
   );
 }
