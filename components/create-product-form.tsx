@@ -2,6 +2,7 @@
 import { FormEvent, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { FormTabs } from "@/components/form-tabs";
 
 const cats = ["Bonecos", "Objetos", "Miniaturas", "Decoração", "Outros"];
 const money = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -307,338 +308,369 @@ export function CreateProductForm({ materials, machines, laborHourRate, energyCo
             </button>
           </div>
           {error && <div className="error">{error}</div>}
-          <div className="section-title">
-            <h3>📦 Dados do produto</h3>
-          </div>
-          <div className="form-grid">
-            <Field label="Nome">
-              <input
-                className="input"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </Field>
-            <Field label="Categoria">
-              <select
-                className="select"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-              >
-                {cats.map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Fotos (até 8)">
-              <input
-                ref={ref}
-                className="input"
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={(e) => setFiles(e.target.files)}
-              />
-            </Field>
-          </div>
-          <div className="section-title">
-            <h3>🖨️ Impressão FDM</h3>
-            <label className="check-row">
-              <input
-                type="checkbox"
-                checked={fdmEnabled}
-                onChange={(e) => setFdmEnabled(e.target.checked)}
-              />{" "}
-              Usar FDM
-            </label>
-          </div>
-          {fdmEnabled && (
-            <div className="form-grid">
-              <Field label="Máquina FDM">
-                <select
-                  className="select"
-                  value={fdmMachineId}
-                  onChange={(e) => setFdmMachineId(e.target.value)}
-                >
-                  <option value="">Selecione</option>
-                  {fdmMachines.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Horas de impressão">
-                <input
-                  className="input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={fdmHours}
-                  onChange={(e) => setFdmHours(e.target.value)}
-                />
-              </Field>
-              <Field label="Material FDM">
-                <select
-                  className="select"
-                  value={fdmMaterialId}
-                  onChange={(e) => setFdmMaterialId(e.target.value)}
-                >
-                  <option value="">Selecione</option>
-                  {fdmMaterials.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} {m.color_name ? `— ${m.color_name}` : ""} —{" "}
-                      {money(Number(m.average_cost))}/{m.unit}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={"Quantidade usada (g)"}>
-                <input
-                  className="input"
-                  type="number"
-                  min="0"
-                  step="0.001"
-                  value={fdmQty}
-                  onChange={(e) => setFdmQty(e.target.value)}
-                />
-              </Field>
-              <Field label="Custo do material">
-                <div className="input">{money(fdmMaterialCost)}</div>
-              </Field>
-            </div>
-          )}
-          <div className="section-title">
-            <h3>🧪 Impressão em resina</h3>
-            <label className="check-row">
-              <input
-                type="checkbox"
-                checked={resinEnabled}
-                onChange={(e) => setResinEnabled(e.target.checked)}
-              />{" "}
-              Usar resina
-            </label>
-          </div>
-          {resinEnabled && (
-            <div className="form-grid">
-              <Field label="Impressora de resina">
-                <select
-                  className="select"
-                  value={resinMachineId}
-                  onChange={(e) => setResinMachineId(e.target.value)}
-                >
-                  <option value="">Selecione</option>
-                  {resinMachines.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Horas de impressão">
-                <input
-                  className="input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={resinHours}
-                  onChange={(e) => setResinHours(e.target.value)}
-                />
-              </Field>
-              <Field label="Resina">
-                <select
-                  className="select"
-                  value={resinMaterialId}
-                  onChange={(e) => setResinMaterialId(e.target.value)}
-                >
-                  <option value="">Selecione</option>
-                  {resinMaterials.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} {m.color_name ? `— ${m.color_name}` : ""} —{" "}
-                      {money(Number(m.average_cost))}/{m.unit}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label={"Quantidade usada (ml)"}>
-                <input
-                  className="input"
-                  type="number"
-                  min="0"
-                  step="0.001"
-                  value={resinQty}
-                  onChange={(e) => setResinQty(e.target.value)}
-                />
-              </Field>
-              <Field label="Custo da resina">
-                <div className="input">{money(resinMaterialCost)}</div>
-              </Field>
-            </div>
-          )}
-          <div className="section-title">
-            <h3>🧴 Outros insumos</h3>
-          </div>
-          <div className="form-grid">
-            <Field label="Insumo">
-              <select
-                className="select"
-                value={extraMaterialId}
-                onChange={(e) => setExtraMaterialId(e.target.value)}
-              >
-                <option value="">Selecione</option>
-                {materials
-                  .filter((m) => m.category === "Insumos")
-                  .map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} {m.color_name ? `— ${m.color_name}` : ""} —{" "}
-                      {money(Number(m.average_cost))}/{m.unit}
-                    </option>
-                  ))}
-              </select>
-            </Field>
-            <Field
-              label={
-                isWeight(materials.find((m) => m.id === extraMaterialId)?.unit || "")
-                  ? "Quantidade usada (g)"
-                  : "Quantidade"
-              }
-            >
-              <input
-                className="input"
-                type="number"
-                min="0"
-                step="0.001"
-                value={extraQty}
-                onChange={(e) => setExtraQty(e.target.value)}
-              />
-            </Field>
-            <Field label="&nbsp;">
-              <button type="button" className="btn btn-secondary" onClick={addExtra}>
-                Adicionar insumo
-              </button>
-            </Field>
-          </div>
-          {extraLinks.length > 0 && (
-            <table>
-              <thead>
-                <tr>
-                  <th>Insumo</th>
-                  <th>Quantidade</th>
-                  <th>Custo</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {extraLinks.map((l) => {
-                  const m = materials.find((x) => x.id === l.material_id);
-                  return (
-                    <tr key={l.material_id}>
-                      <td>{m?.name}</td>
-                      <td>
-                        {l.quantity} {isWeight(m?.unit || "") ? "g" : m?.unit}
-                      </td>
-                      <td>{money(costOf(m, Number(l.quantity)))}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className="btn btn-danger btn-sm"
-                          onClick={() =>
-                            setExtraLinks((x) => x.filter((a) => a.material_id !== l.material_id))
-                          }
+          <FormTabs
+            defaultTab="dados"
+            sections={[
+              {
+                id: "dados",
+                label: "📦 Dados",
+                content: (
+                  <div className="form-grid">
+                    <Field label="Nome">
+                      <input
+                        className="input"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        required
+                      />
+                    </Field>
+                    <Field label="Categoria">
+                      <select
+                        className="select"
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                      >
+                        {cats.map((c) => (
+                          <option key={c}>{c}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Fotos (até 8)">
+                      <input
+                        ref={ref}
+                        className="input"
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(e) => setFiles(e.target.files)}
+                      />
+                    </Field>
+                  </div>
+                ),
+              },
+              {
+                id: "fdm",
+                label: "🖨️ FDM",
+                content: (
+                  <>
+                    <label className="check-row" style={{ marginBottom: 12 }}>
+                      <input
+                        type="checkbox"
+                        checked={fdmEnabled}
+                        onChange={(e) => setFdmEnabled(e.target.checked)}
+                      />{" "}
+                      Usar FDM
+                    </label>
+                    {fdmEnabled && (
+                      <div className="form-grid">
+                        <Field label="Máquina FDM">
+                          <select
+                            className="select"
+                            value={fdmMachineId}
+                            onChange={(e) => setFdmMachineId(e.target.value)}
+                          >
+                            <option value="">Selecione</option>
+                            {fdmMachines.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.name}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field label="Horas de impressão">
+                          <input
+                            className="input"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={fdmHours}
+                            onChange={(e) => setFdmHours(e.target.value)}
+                          />
+                        </Field>
+                        <Field label="Material FDM">
+                          <select
+                            className="select"
+                            value={fdmMaterialId}
+                            onChange={(e) => setFdmMaterialId(e.target.value)}
+                          >
+                            <option value="">Selecione</option>
+                            {fdmMaterials.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.name} {m.color_name ? `— ${m.color_name}` : ""} —{" "}
+                                {money(Number(m.average_cost))}/{m.unit}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field label={"Quantidade usada (g)"}>
+                          <input
+                            className="input"
+                            type="number"
+                            min="0"
+                            step="0.001"
+                            value={fdmQty}
+                            onChange={(e) => setFdmQty(e.target.value)}
+                          />
+                        </Field>
+                        <Field label="Custo do material">
+                          <div className="input">{money(fdmMaterialCost)}</div>
+                        </Field>
+                      </div>
+                    )}
+                  </>
+                ),
+              },
+              {
+                id: "resina",
+                label: "🧪 Resina",
+                content: (
+                  <>
+                    <label className="check-row" style={{ marginBottom: 12 }}>
+                      <input
+                        type="checkbox"
+                        checked={resinEnabled}
+                        onChange={(e) => setResinEnabled(e.target.checked)}
+                      />{" "}
+                      Usar resina
+                    </label>
+                    {resinEnabled && (
+                      <div className="form-grid">
+                        <Field label="Impressora de resina">
+                          <select
+                            className="select"
+                            value={resinMachineId}
+                            onChange={(e) => setResinMachineId(e.target.value)}
+                          >
+                            <option value="">Selecione</option>
+                            {resinMachines.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.name}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field label="Horas de impressão">
+                          <input
+                            className="input"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={resinHours}
+                            onChange={(e) => setResinHours(e.target.value)}
+                          />
+                        </Field>
+                        <Field label="Resina">
+                          <select
+                            className="select"
+                            value={resinMaterialId}
+                            onChange={(e) => setResinMaterialId(e.target.value)}
+                          >
+                            <option value="">Selecione</option>
+                            {resinMaterials.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.name} {m.color_name ? `— ${m.color_name}` : ""} —{" "}
+                                {money(Number(m.average_cost))}/{m.unit}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field label={"Quantidade usada (ml)"}>
+                          <input
+                            className="input"
+                            type="number"
+                            min="0"
+                            step="0.001"
+                            value={resinQty}
+                            onChange={(e) => setResinQty(e.target.value)}
+                          />
+                        </Field>
+                        <Field label="Custo da resina">
+                          <div className="input">{money(resinMaterialCost)}</div>
+                        </Field>
+                      </div>
+                    )}
+                  </>
+                ),
+              },
+              {
+                id: "insumos",
+                label: "🧴 Insumos",
+                content: (
+                  <>
+                    <div className="form-grid">
+                      <Field label="Insumo">
+                        <select
+                          className="select"
+                          value={extraMaterialId}
+                          onChange={(e) => setExtraMaterialId(e.target.value)}
                         >
-                          Remover
+                          <option value="">Selecione</option>
+                          {materials
+                            .filter((m) => m.category === "Insumos")
+                            .map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.name} {m.color_name ? `— ${m.color_name}` : ""} —{" "}
+                                {money(Number(m.average_cost))}/{m.unit}
+                              </option>
+                            ))}
+                        </select>
+                      </Field>
+                      <Field
+                        label={
+                          isWeight(materials.find((m) => m.id === extraMaterialId)?.unit || "")
+                            ? "Quantidade usada (g)"
+                            : "Quantidade"
+                        }
+                      >
+                        <input
+                          className="input"
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          value={extraQty}
+                          onChange={(e) => setExtraQty(e.target.value)}
+                        />
+                      </Field>
+                      <Field label="&nbsp;">
+                        <button type="button" className="btn btn-secondary" onClick={addExtra}>
+                          Adicionar insumo
                         </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-          <div className="section-title">
-            <h3>🎨 Pintura e acabamento</h3>
-          </div>
-          <div className="form-grid">
-            <Field label="Horas de pintura">
-              <input
-                className="input"
-                type="number"
-                min="0"
-                step="0.01"
-                value={paintingHours}
-                onChange={(e) => setPaintingHours(e.target.value)}
-              />
-            </Field>
-            <Field label="Horas de acabamento">
-              <input
-                className="input"
-                type="number"
-                min="0"
-                step="0.01"
-                value={finishingHours}
-                onChange={(e) => setFinishingHours(e.target.value)}
-              />
-            </Field>
-            <Field label="Valor cobrado por hora">
-              <div className="input">{money(laborHourRate)}</div>
-            </Field>
-            <Field label="Materiais de pintura">
-              <input
-                className="input"
-                type="number"
-                min="0"
-                step="0.01"
-                value={paintingMaterials}
-                onChange={(e) => setPaintingMaterials(e.target.value)}
-              />
-            </Field>
-            <Field label="Embalagem">
-              <input
-                className="input"
-                type="number"
-                min="0"
-                step="0.01"
-                value={packagingCost}
-                onChange={(e) => setPackagingCost(e.target.value)}
-              />
-            </Field>
-            <Field label="Outros custos">
-              <input
-                className="input"
-                type="number"
-                min="0"
-                step="0.01"
-                value={otherCost}
-                onChange={(e) => setOtherCost(e.target.value)}
-              />
-            </Field>
-          </div>
-          <div className="section-title">
-            <h3>📊 Margem e perdas</h3>
-          </div>
-          <div className="form-grid">
-            <Field label="Perda/refugo (%)">
-              <input
-                className="input"
-                type="number"
-                min="0"
-                step="0.01"
-                value={lossPercent}
-                onChange={(e) => setLossPercent(e.target.value)}
-              />
-            </Field>
-            <Field label="Margem desejada (%)">
-              <input
-                className="input"
-                type="number"
-                min="0"
-                step="0.01"
-                value={marginPercent}
-                onChange={(e) => setMarginPercent(e.target.value)}
-              />
-            </Field>
-          </div>
-          <div className="card">
+                      </Field>
+                    </div>
+                    {extraLinks.length > 0 && (
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Insumo</th>
+                            <th>Quantidade</th>
+                            <th>Custo</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {extraLinks.map((l) => {
+                            const m = materials.find((x) => x.id === l.material_id);
+                            return (
+                              <tr key={l.material_id}>
+                                <td>{m?.name}</td>
+                                <td>
+                                  {l.quantity} {isWeight(m?.unit || "") ? "g" : m?.unit}
+                                </td>
+                                <td>{money(costOf(m, Number(l.quantity)))}</td>
+                                <td>
+                                  <button
+                                    type="button"
+                                    className="btn btn-danger btn-sm"
+                                    onClick={() =>
+                                      setExtraLinks((x) =>
+                                        x.filter((a) => a.material_id !== l.material_id)
+                                      )
+                                    }
+                                  >
+                                    Remover
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </>
+                ),
+              },
+              {
+                id: "pintura",
+                label: "🎨 Pintura",
+                content: (
+                  <div className="form-grid">
+                    <Field label="Horas de pintura">
+                      <input
+                        className="input"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={paintingHours}
+                        onChange={(e) => setPaintingHours(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Horas de acabamento">
+                      <input
+                        className="input"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={finishingHours}
+                        onChange={(e) => setFinishingHours(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Valor cobrado por hora">
+                      <div className="input">{money(laborHourRate)}</div>
+                    </Field>
+                    <Field label="Materiais de pintura">
+                      <input
+                        className="input"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={paintingMaterials}
+                        onChange={(e) => setPaintingMaterials(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Embalagem">
+                      <input
+                        className="input"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={packagingCost}
+                        onChange={(e) => setPackagingCost(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Outros custos">
+                      <input
+                        className="input"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={otherCost}
+                        onChange={(e) => setOtherCost(e.target.value)}
+                      />
+                    </Field>
+                  </div>
+                ),
+              },
+              {
+                id: "margem",
+                label: "📊 Margem",
+                content: (
+                  <div className="form-grid">
+                    <Field label="Perda/refugo (%)">
+                      <input
+                        className="input"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={lossPercent}
+                        onChange={(e) => setLossPercent(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Margem desejada (%)">
+                      <input
+                        className="input"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={marginPercent}
+                        onChange={(e) => setMarginPercent(e.target.value)}
+                      />
+                    </Field>
+                  </div>
+                ),
+              },
+            ]}
+          />
+          <div className="card" style={{ marginTop: 16 }}>
             <h3>🧮 Resumo</h3>
             <div className="form-grid">
               <p>
