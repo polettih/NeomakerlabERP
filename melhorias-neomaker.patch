@@ -38,6 +38,186 @@ index 0000000..8766277
 +# typescript
 +*.tsbuildinfo
 +next-env.d.ts
+diff --git a/app/(app)/dashboard/page.tsx b/app/(app)/dashboard/page.tsx
+index c1e59f0..42e9a78 100644
+--- a/app/(app)/dashboard/page.tsx
++++ b/app/(app)/dashboard/page.tsx
+@@ -1,3 +1,4 @@
++import Link from "next/link";
+ import { getDashboard } from "@/lib/services/dashboard";
+ const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+ export default async function DashboardPage() {
+@@ -10,7 +11,14 @@ export default async function DashboardPage() {
+           <h1>Início</h1>
+           <p className="muted">Resumo geral da operação</p>
+         </div>
++        <Link className="btn btn-secondary" href="/financeiro">
++          Ver relatório financeiro →
++        </Link>
+       </div>
++
++      <p className="muted" style={{ margin: "0 0 8px" }}>
++        Resultado
++      </p>
+       <div className="grid cards">
+         <div className="card">
+           <div className="label">Vendas</div>
+@@ -28,23 +36,30 @@ export default async function DashboardPage() {
+           <div className="label">Lucro líquido</div>
+           <div className="value">{money(d.profit)}</div>
+         </div>
+-        <div className="card">
+-          <div className="label">Itens vendidos</div>
+-          <div className="value">{d.itemsSold}</div>
+-        </div>
+-        <div className="card">
++      </div>
++
++      <p className="muted" style={{ margin: "18px 0 8px" }}>
++        Operação
++      </p>
++      <div className="grid cards">
++        <Link className="card" href="/pedidos">
++          <div className="label">Pedidos</div>
++          <div className="value">{d.orders.length}</div>
++        </Link>
++        <Link className="card" href="/pedidos">
+           <div className="label">Pedidos em aberto</div>
+           <div className="value">{pending}</div>
+-        </div>
++        </Link>
+         <div className="card">
+-          <div className="label">Pedidos</div>
+-          <div className="value">{d.orders.length}</div>
++          <div className="label">Itens vendidos</div>
++          <div className="value">{d.itemsSold}</div>
+         </div>
+-        <div className="card">
++        <Link className="card" href="/gastos-e-compras">
+           <div className="label">Despesas</div>
+           <div className="value">{money(d.costs)}</div>
+-        </div>
++        </Link>
+       </div>
++
+       <div className="grid" style={{ gridTemplateColumns: "2fr 1fr", marginTop: 18 }}>
+         <div className="card">
+           <div className="section-title">
+diff --git a/app/(app)/financeiro/page.tsx b/app/(app)/financeiro/page.tsx
+index 1b76f1b..f563926 100644
+--- a/app/(app)/financeiro/page.tsx
++++ b/app/(app)/financeiro/page.tsx
+@@ -1,8 +1,7 @@
++import Link from "next/link";
+ import { requireUser } from "@/lib/auth";
+-import { CreateExpenseForm } from "@/components/create-expense-form";
+ import { FinanceTabs } from "@/components/finance-tabs";
+ import { FinancialHistory } from "@/components/financial-history";
+-import { ExpenseList } from "@/components/expense-list";
+ import { RecurringExpensesManager } from "@/components/recurring-expenses-manager";
+ import { MonthlySummary } from "@/components/monthly-summary";
+ import { PageTabs } from "@/components/page-tabs";
+@@ -340,6 +339,9 @@ export default async function FinanceiroPage() {
+             da operação.
+           </p>
+         </div>
++        <Link className="btn btn-secondary" href="/gastos-e-compras">
++          Lançar gastos e compras →
++        </Link>
+       </div>
+ 
+       <MonthlySummary current={currentMonth} previous={previousMonth} />
+@@ -434,16 +436,6 @@ export default async function FinanceiroPage() {
+               />
+             ),
+           },
+-          {
+-            id: "gastos",
+-            label: "Gastos e compras",
+-            content: (
+-              <div className="grid" style={{ gridTemplateColumns: "1fr 2fr" }}>
+-                <CreateExpenseForm />
+-                <ExpenseList expenses={(expenses ?? []) as Expense[]} />
+-              </div>
+-            ),
+-          },
+           {
+             id: "recorrentes",
+             label: "Despesas recorrentes",
+diff --git a/app/(app)/gastos-e-compras/page.tsx b/app/(app)/gastos-e-compras/page.tsx
+index a408b00..32bdd39 100644
+--- a/app/(app)/gastos-e-compras/page.tsx
++++ b/app/(app)/gastos-e-compras/page.tsx
+@@ -1,7 +1,9 @@
++import Link from "next/link";
+ import { requireUser } from "@/lib/auth";
+ import { CreateExpenseForm } from "@/components/create-expense-form";
+ import { InventoryManager } from "@/components/inventory-manager";
+ import { ExpenseList } from "@/components/expense-list";
++import { PageTabs } from "@/components/page-tabs";
+ const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+ export default async function GastosPage() {
+   const { supabase } = await requireUser();
+@@ -28,6 +30,9 @@ export default async function GastosPage() {
+       (sum: number, e: { amount?: number | string | null }) => sum + Number(e.amount || 0),
+       0
+     );
++  const payableTotal = (expenses ?? [])
++    .filter((e) => e.status !== "cancelled" && e.status !== "paid")
++    .reduce((sum: number, e: { amount?: number | string | null }) => sum + Number(e.amount || 0), 0);
+   const stockValue = (materials ?? []).reduce(
+     (
+       sum: number,
+@@ -44,8 +49,11 @@ export default async function GastosPage() {
+             Gestão unificada de estoque, compras, insumos e demais gastos da operação.
+           </p>
+         </div>
++        <Link className="btn btn-secondary" href="/financeiro">
++          Ver relatório financeiro completo →
++        </Link>
+       </div>
+-      <div className="grid three-col" style={{ marginBottom: 18 }}>
++      <div className="grid four-col" style={{ marginBottom: 18 }}>
+         <div className="card">
+           <span className="muted">Materiais cadastrados</span>
+           <h2>{materials?.length || 0}</h2>
+@@ -58,12 +66,31 @@ export default async function GastosPage() {
+           <span className="muted">Saídas registradas</span>
+           <h2>{money(expenseTotal + materialPurchasesTotal)}</h2>
+         </div>
++        <div className="card">
++          <span className="muted">Despesas em aberto</span>
++          <h2 className={payableTotal > 0 ? "error" : ""}>{money(payableTotal)}</h2>
++        </div>
+       </div>
+-      <InventoryManager materials={materials ?? []} />
+-      <div className="grid two-col" style={{ marginTop: 18 }}>
+-        <CreateExpenseForm />
+-        <ExpenseList expenses={(expenses ?? []) as any} />
+-      </div>
++      <PageTabs
++        defaultTab="estoque"
++        tabs={[
++          {
++            id: "estoque",
++            label: "📦 Estoque de materiais",
++            content: <InventoryManager materials={materials ?? []} />,
++          },
++          {
++            id: "despesas",
++            label: "🧾 Despesas avulsas",
++            content: (
++              <div className="grid two-col">
++                <CreateExpenseForm />
++                <ExpenseList expenses={(expenses ?? []) as any} />
++              </div>
++            ),
++          },
++        ]}
++      />
+     </div>
+   );
+ }
 diff --git a/app/(app)/pedidos/page.tsx b/app/(app)/pedidos/page.tsx
 index 63af85b..5cdd923 100644
 --- a/app/(app)/pedidos/page.tsx
@@ -209,10 +389,26 @@ index 53d1ab9..cd5eb1b 100644
    );
  }
 diff --git a/app/globals.css b/app/globals.css
-index 8f859ec..f5417ca 100644
+index 8f859ec..5f2736f 100644
 --- a/app/globals.css
 +++ b/app/globals.css
-@@ -21,6 +21,8 @@ table{width:100%;border-collapse:collapse}th,td{padding:13px 15px;text-align:lef
+@@ -10,6 +10,15 @@ a{color:inherit;text-decoration:none} button,input,select,textarea{font:inherit}
+ .nav{display:grid;gap:5px}.nav a{padding:11px 12px;border-radius:9px;color:var(--muted)}.nav a:hover{background:#191e25;color:white}
+ .main{margin-left:240px;width:calc(100% - 240px)}.topbar{height:64px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;background:#0b0d10ee;position:sticky;top:0;z-index:10}
+ .content{padding:28px;max-width:1500px;margin:auto}.grid{display:grid;gap:16px}.cards{grid-template-columns:repeat(4,minmax(0,1fr))}
++/* Column-count helpers used across Financeiro, Gastos e compras, Estoque, Máquinas,
++   Precificação etc. These classes were referenced in 12 places but never defined,
++   so every "grid two-col/three-col/four-col" collapsed to a single stacked column —
++   this is the main cause of the excessive scrolling on data-heavy pages. */
++.two-col{grid-template-columns:repeat(2,minmax(0,1fr))}
++.three-col{grid-template-columns:repeat(3,minmax(0,1fr))}
++.four-col{grid-template-columns:repeat(4,minmax(0,1fr))}
++@media(max-width:1100px){.four-col{grid-template-columns:repeat(2,minmax(0,1fr))}}
++@media(max-width:700px){.two-col,.three-col,.four-col{grid-template-columns:1fr}}
+ .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px}.label{color:var(--muted);font-size:13px}.value{font-size:27px;font-weight:800;margin-top:8px}.muted{color:var(--muted)}
+ .section-title{display:flex;justify-content:space-between;align-items:center;margin:0 0 16px}.section-title h1,.section-title h2{margin:0}
+ .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:9px;padding:10px 14px;cursor:pointer;font-weight:700}
+@@ -21,6 +30,8 @@ table{width:100%;border-collapse:collapse}th,td{padding:13px 15px;text-align:lef
  th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}tr:last-child td{border-bottom:0}
  .badge{display:inline-flex;padding:5px 9px;border-radius:999px;background:#252b33;color:#d8dee7;font-size:12px;font-weight:700}
  .badge.green{background:#0d2d1a;color:#86efac}.badge.yellow{background:#3a2c06;color:#fde68a}
@@ -221,6 +417,50 @@ index 8f859ec..f5417ca 100644
  .error{background:#3b1111;border:1px solid #6f1d1d;color:#fecaca;border-radius:8px;padding:10px}
  .success{background:#0d2d1a;border:1px solid #1c6a3a;color:#bbf7d0;border-radius:8px;padding:10px}
  .login-page{min-height:100vh;display:grid;place-items:center;padding:20px}.login-card{width:min(420px,100%);background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:28px}
+diff --git a/components/inventory-manager.tsx b/components/inventory-manager.tsx
+index af6ef3b..5a8a96c 100644
+--- a/components/inventory-manager.tsx
++++ b/components/inventory-manager.tsx
+@@ -44,11 +44,20 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
+     description: "",
+   });
+   const [filter, setFilter] = useState("Todos");
++  const [q, setQ] = useState("");
+   const [error, setError] = useState("");
+-  const filtered = useMemo(
+-    () => (filter === "Todos" ? materials : materials.filter((m) => m.material_type === filter)),
+-    [materials, filter]
+-  );
++  const filtered = useMemo(() => {
++    const term = q.trim().toLowerCase();
++    return materials.filter((m) => {
++      if (filter !== "Todos" && m.material_type !== filter) return false;
++      if (!term) return true;
++      return (
++        m.name.toLowerCase().includes(term) ||
++        (m.supplier ?? "").toLowerCase().includes(term) ||
++        (m.color_name ?? "").toLowerCase().includes(term)
++      );
++    });
++  }, [materials, filter, q]);
+   function updateForm(k: string, v: string) {
+     const next = { ...form, [k]: v } as typeof form;
+     if (k === "material_type") next.unit = typeUnit(v);
+@@ -147,7 +156,13 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
+           <h2>📦 Gestão de estoque e compras</h2>
+           <p className="muted">Cadastre, compre, consuma e corrija materiais em um único fluxo.</p>
+         </div>
+-        <div className="form-grid">
++        <div className="filters-row">
++          <input
++            className="input"
++            placeholder="Buscar material, cor ou fornecedor"
++            value={q}
++            onChange={(e) => setQ(e.target.value)}
++          />
+           <button
+             type="button"
+             className={`btn ${filter === "Todos" ? "btn-primary" : "btn-secondary"}`}
 diff --git a/components/order-table.tsx b/components/order-table.tsx
 new file mode 100644
 index 0000000..f87fa47
@@ -552,32 +792,6 @@ index 0000000..9b97dd0
 +    </div>
 +  );
 +}
-diff --git a/middleware.ts b/middleware.ts
-new file mode 100644
-index 0000000..f73abd8
---- /dev/null
-+++ b/middleware.ts
-@@ -0,0 +1,20 @@
-+import type { NextRequest } from "next/server";
-+import { updateSession } from "@/lib/supabase/proxy";
-+
-+// Runs on every request (see matcher below). Keeps the Supabase auth session
-+// cookie refreshed and enforces the login/redirect rules in
-+// lib/supabase/proxy.ts. Previously this logic lived in a root-level
-+// `proxy.ts` file that Next.js never executed, because middleware must be a
-+// file literally named `middleware.ts` at the project root — so sessions
-+// were never refreshed proactively and could expire unexpectedly.
-+export async function middleware(request: NextRequest) {
-+  return updateSession(request);
-+}
-+
-+export const config = {
-+  matcher: [
-+    // Skip static files, images and the PWA manifest/service worker so the
-+    // middleware only runs for actual pages/API routes.
-+    "/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-+  ],
-+};
 diff --git a/product-editor.tsx b/product-editor.tsx
 deleted file mode 100644
 index bc15a9e..0000000
@@ -600,20 +814,3 @@ index bc15a9e..0000000
 - <div className="section-title"><h3>🎨 Pintura e acabamento</h3></div><div className="form-grid"><Field label="Horas de pintura"><input className="input" type="number" step="0.01" min="0" value={paintingHours} onChange={e=>setPaintingHours(e.target.value)}/></Field><Field label="Horas de acabamento"><input className="input" type="number" step="0.01" min="0" value={finishingHours} onChange={e=>setFinishingHours(e.target.value)}/></Field><Field label="Valor/hora"><div className="input">{money(laborHourRate)}</div></Field><Field label="Materiais de pintura"><input className="input" type="number" step="0.01" min="0" value={paintingMaterials} onChange={e=>setPaintingMaterials(e.target.value)}/></Field><Field label="Embalagem"><input className="input" type="number" step="0.01" min="0" value={packagingCost} onChange={e=>setPackagingCost(e.target.value)}/></Field><Field label="Outros custos"><input className="input" type="number" step="0.01" min="0" value={otherCost} onChange={e=>setOtherCost(e.target.value)}/></Field><Field label="Perda/refugo (%)"><input className="input" type="number" step="0.01" min="0" value={lossPercent} onChange={e=>setLossPercent(e.target.value)}/></Field><Field label="Margem desejada (%)"><input className="input" type="number" step="0.01" min="0" value={marginPercent} onChange={e=>setMarginPercent(e.target.value)}/></Field></div>
 - <div className="card"><h3>🧮 Resumo</h3><div className="form-grid"><p>Materiais<br/><b>{money(materialCost)}</b></p><p>Perdas<br/><b>{money(waste)}</b></p><p>Energia<br/><b>{money(energyCost)}</b></p><p>Depreciação<br/><b>{money(depreciation)}</b></p><p>Mão de obra<br/><b>{money(labor)}</b></p><p>Outros<br/><b>{money(extras)}</b></p><p><strong>Custo total</strong><br/><span className="value">{money(total)}</span></p><p><strong>Preço sugerido</strong><br/><span className="value">{money(suggested)}</span></p><p><strong>Lucro líquido estimado</strong><br/><span className="value">{money(profit)}</span></p></div></div><div className="section-title"><div><h3>📸 Fotos ({images.length}/8)</h3><p className="muted">A primeira foto continua sendo a principal.</p></div><button className="btn btn-secondary" disabled={busy||images.length>=8} onClick={()=>ref.current?.click()}>Adicionar fotos</button><input ref={ref} type="file" accept="image/*" multiple hidden onChange={e=>upload(e.target.files)}/></div><div className="photo-grid">{images.map((img,i)=><div className="photo-item" key={img.id}><img src={img.public_url} alt=""/><div className="photo-caption"><span className="badge">{i===0?'Principal':`#${i+1}`}</span><button className="btn btn-danger btn-sm" onClick={()=>remove(img)}>Remover</button></div></div>)}</div><div className="actions" style={{justifyContent:'flex-end',marginTop:18}}><button className="btn btn-secondary" onClick={()=>setOpen(false)}>Cancelar</button><button className="btn btn-primary" disabled={busy} onClick={save}>{busy?'Salvando...':'Salvar alterações'}</button></div></>}</div></div>}</>}
 -function Field({label,children}:{label:string;children:ReactNode}){return <div className="field"><label>{label}</label>{children}</div>}
-diff --git a/proxy.ts b/proxy.ts
-deleted file mode 100644
-index 495824b..0000000
---- a/proxy.ts
-+++ /dev/null
-@@ -1,10 +0,0 @@
--import type { NextRequest } from "next/server";
--import { updateSession } from "@/lib/supabase/proxy";
--
--export async function proxy(request: NextRequest) {
--  return updateSession(request);
--}
--
--export const config = {
--  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
--};
-\ No newline at end of file

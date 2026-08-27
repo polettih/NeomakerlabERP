@@ -1,8 +1,7 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/auth";
-import { CreateExpenseForm } from "@/components/create-expense-form";
 import { FinanceTabs } from "@/components/finance-tabs";
 import { FinancialHistory } from "@/components/financial-history";
-import { ExpenseList } from "@/components/expense-list";
 import { RecurringExpensesManager } from "@/components/recurring-expenses-manager";
 import { MonthlySummary } from "@/components/monthly-summary";
 import { PageTabs } from "@/components/page-tabs";
@@ -340,6 +339,9 @@ export default async function FinanceiroPage() {
             da operação.
           </p>
         </div>
+        <Link className="btn btn-secondary" href="/gastos-e-compras">
+          Lançar gastos e compras →
+        </Link>
       </div>
 
       <MonthlySummary current={currentMonth} previous={previousMonth} />
@@ -432,16 +434,6 @@ export default async function FinanceiroPage() {
                 totalGross={totalGross}
                 totalReceived={totalReceived}
               />
-            ),
-          },
-          {
-            id: "gastos",
-            label: "Gastos e compras",
-            content: (
-              <div className="grid" style={{ gridTemplateColumns: "1fr 2fr" }}>
-                <CreateExpenseForm />
-                <ExpenseList expenses={(expenses ?? []) as Expense[]} />
-              </div>
             ),
           },
           {

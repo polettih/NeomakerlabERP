@@ -44,11 +44,20 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
     description: "",
   });
   const [filter, setFilter] = useState("Todos");
+  const [q, setQ] = useState("");
   const [error, setError] = useState("");
-  const filtered = useMemo(
-    () => (filter === "Todos" ? materials : materials.filter((m) => m.material_type === filter)),
-    [materials, filter]
-  );
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return materials.filter((m) => {
+      if (filter !== "Todos" && m.material_type !== filter) return false;
+      if (!term) return true;
+      return (
+        m.name.toLowerCase().includes(term) ||
+        (m.supplier ?? "").toLowerCase().includes(term) ||
+        (m.color_name ?? "").toLowerCase().includes(term)
+      );
+    });
+  }, [materials, filter, q]);
   function updateForm(k: string, v: string) {
     const next = { ...form, [k]: v } as typeof form;
     if (k === "material_type") next.unit = typeUnit(v);
@@ -147,7 +156,13 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
           <h2>📦 Gestão de estoque e compras</h2>
           <p className="muted">Cadastre, compre, consuma e corrija materiais em um único fluxo.</p>
         </div>
-        <div className="form-grid">
+        <div className="filters-row">
+          <input
+            className="input"
+            placeholder="Buscar material, cor ou fornecedor"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
           <button
             type="button"
             className={`btn ${filter === "Todos" ? "btn-primary" : "btn-secondary"}`}

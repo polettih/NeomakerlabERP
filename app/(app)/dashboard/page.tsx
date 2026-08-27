@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getDashboard } from "@/lib/services/dashboard";
 const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 export default async function DashboardPage() {
@@ -10,7 +11,14 @@ export default async function DashboardPage() {
           <h1>Início</h1>
           <p className="muted">Resumo geral da operação</p>
         </div>
+        <Link className="btn btn-secondary" href="/financeiro">
+          Ver relatório financeiro →
+        </Link>
       </div>
+
+      <p className="muted" style={{ margin: "0 0 8px" }}>
+        Resultado
+      </p>
       <div className="grid cards">
         <div className="card">
           <div className="label">Vendas</div>
@@ -28,23 +36,30 @@ export default async function DashboardPage() {
           <div className="label">Lucro líquido</div>
           <div className="value">{money(d.profit)}</div>
         </div>
+      </div>
+
+      <p className="muted" style={{ margin: "18px 0 8px" }}>
+        Operação
+      </p>
+      <div className="grid cards">
+        <Link className="card" href="/pedidos">
+          <div className="label">Pedidos</div>
+          <div className="value">{d.orders.length}</div>
+        </Link>
+        <Link className="card" href="/pedidos">
+          <div className="label">Pedidos em aberto</div>
+          <div className="value">{pending}</div>
+        </Link>
         <div className="card">
           <div className="label">Itens vendidos</div>
           <div className="value">{d.itemsSold}</div>
         </div>
-        <div className="card">
-          <div className="label">Pedidos em aberto</div>
-          <div className="value">{pending}</div>
-        </div>
-        <div className="card">
-          <div className="label">Pedidos</div>
-          <div className="value">{d.orders.length}</div>
-        </div>
-        <div className="card">
+        <Link className="card" href="/gastos-e-compras">
           <div className="label">Despesas</div>
           <div className="value">{money(d.costs)}</div>
-        </div>
+        </Link>
       </div>
+
       <div className="grid" style={{ gridTemplateColumns: "2fr 1fr", marginTop: 18 }}>
         <div className="card">
           <div className="section-title">

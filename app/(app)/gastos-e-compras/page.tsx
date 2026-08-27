@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { CreateExpenseForm } from "@/components/create-expense-form";
 import { InventoryManager } from "@/components/inventory-manager";
 import { ExpenseList } from "@/components/expense-list";
+import { PageTabs } from "@/components/page-tabs";
 const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 export default async function GastosPage() {
   const { supabase } = await requireUser();
@@ -28,6 +30,9 @@ export default async function GastosPage() {
       (sum: number, e: { amount?: number | string | null }) => sum + Number(e.amount || 0),
       0
     );
+  const payableTotal = (expenses ?? [])
+    .filter((e) => e.status !== "cancelled" && e.status !== "paid")
+    .reduce((sum: number, e: { amount?: number | string | null }) => sum + Number(e.amount || 0), 0);
   const stockValue = (materials ?? []).reduce(
     (
       sum: number,
@@ -44,8 +49,11 @@ export default async function GastosPage() {
             Gestão unificada de estoque, compras, insumos e demais gastos da operação.
           </p>
         </div>
+        <Link className="btn btn-secondary" href="/financeiro">
+          Ver relatório financeiro completo →
+        </Link>
       </div>
-      <div className="grid three-col" style={{ marginBottom: 18 }}>
+      <div className="grid four-col" style={{ marginBottom: 18 }}>
         <div className="card">
           <span className="muted">Materiais cadastrados</span>
           <h2>{materials?.length || 0}</h2>
@@ -58,12 +66,31 @@ export default async function GastosPage() {
           <span className="muted">Saídas registradas</span>
           <h2>{money(expenseTotal + materialPurchasesTotal)}</h2>
         </div>
+        <div className="card">
+          <span className="muted">Despesas em aberto</span>
+          <h2 className={payableTotal > 0 ? "error" : ""}>{money(payableTotal)}</h2>
+        </div>
       </div>
-      <InventoryManager materials={materials ?? []} />
-      <div className="grid two-col" style={{ marginTop: 18 }}>
-        <CreateExpenseForm />
-        <ExpenseList expenses={(expenses ?? []) as any} />
-      </div>
+      <PageTabs
+        defaultTab="estoque"
+        tabs={[
+          {
+            id: "estoque",
+            label: "📦 Estoque de materiais",
+            content: <InventoryManager materials={materials ?? []} />,
+          },
+          {
+            id: "despesas",
+            label: "🧾 Despesas avulsas",
+            content: (
+              <div className="grid two-col">
+                <CreateExpenseForm />
+                <ExpenseList expenses={(expenses ?? []) as any} />
+              </div>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 }
