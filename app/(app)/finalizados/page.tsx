@@ -1,1 +1,10 @@
-import {OrderStatusPage} from "@/components/order-status-page"; export default async function Page(){return <OrderStatusPage title="Finalizados" subtitle="Pedidos entregues/finalizados." statuses={["delivered"]}/>}
+import { OrderStatusPage } from "@/components/order-status-page";
+export default async function Page() {
+  return (
+    <OrderStatusPage
+      title="Finalizados"
+      subtitle="Pedidos entregues/finalizados."
+      statuses={["delivered"]}
+    />
+  );
+}

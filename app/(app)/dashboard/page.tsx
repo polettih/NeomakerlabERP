@@ -1,3 +1,108 @@
-import {getDashboard} from "@/lib/services/dashboard";
-const money=(v:number)=>v.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
-export default async function DashboardPage(){const d=await getDashboard();const pending=d.orders.filter(o=>!['delivered','cancelled'].includes(o.status)).length;return <div className="content"><div className="section-title"><div><h1>Início</h1><p className="muted">Resumo geral da operação</p></div></div><div className="grid cards"><div className="card"><div className="label">Vendas</div><div className="value">{money(d.sales)}</div></div><div className="card"><div className="label">Recebido</div><div className="value kpi-green">{money(d.received)}</div></div><div className="card"><div className="label">A receber</div><div className="value kpi-yellow">{money(d.receivable)}</div></div><div className="card"><div className="label">Lucro líquido</div><div className="value">{money(d.profit)}</div></div><div className="card"><div className="label">Itens vendidos</div><div className="value">{d.itemsSold}</div></div><div className="card"><div className="label">Pedidos em aberto</div><div className="value">{pending}</div></div><div className="card"><div className="label">Pedidos</div><div className="value">{d.orders.length}</div></div><div className="card"><div className="label">Despesas</div><div className="value">{money(d.costs)}</div></div></div><div className="grid" style={{gridTemplateColumns:"2fr 1fr",marginTop:18}}><div className="card"><div className="section-title"><h2>Vendas por categoria</h2></div><div className="table-wrap"><table><thead><tr><th>Categoria</th><th>Itens</th><th>Vendido</th><th>Recebido</th><th>Lucro</th><th>A receber</th></tr></thead><tbody>{d.categories.map((r:any)=><tr key={r.category}><td><strong>{r.category}</strong></td><td>{r.qty}</td><td>{money(r.sales)}</td><td>{money(r.received)}</td><td>{money(r.profit)}</td><td>{money(r.receivable)}</td></tr>)}{!d.categories.length&&<tr><td colSpan={6} className="muted">Nenhuma venda ainda.</td></tr>}</tbody></table></div></div><div className="card"><h2>Produção</h2><p className="muted">Fila atual</p><div className="grid" style={{marginTop:16}}>{[['pending','Aguardando'],['in_progress','Em produção'],['completed','Concluída']].map(([s,l])=><div key={s} style={{display:'flex',justifyContent:'space-between'}}><span>{l}</span><strong>{d.production.filter(p=>p.status===s).length}</strong></div>)}</div></div></div></div>}
+import { getDashboard } from "@/lib/services/dashboard";
+const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+export default async function DashboardPage() {
+  const d = await getDashboard();
+  const pending = d.orders.filter((o) => !["delivered", "cancelled"].includes(o.status)).length;
+  return (
+    <div className="content">
+      <div className="section-title">
+        <div>
+          <h1>Início</h1>
+          <p className="muted">Resumo geral da operação</p>
+        </div>
+      </div>
+      <div className="grid cards">
+        <div className="card">
+          <div className="label">Vendas</div>
+          <div className="value">{money(d.sales)}</div>
+        </div>
+        <div className="card">
+          <div className="label">Recebido</div>
+          <div className="value kpi-green">{money(d.received)}</div>
+        </div>
+        <div className="card">
+          <div className="label">A receber</div>
+          <div className="value kpi-yellow">{money(d.receivable)}</div>
+        </div>
+        <div className="card">
+          <div className="label">Lucro líquido</div>
+          <div className="value">{money(d.profit)}</div>
+        </div>
+        <div className="card">
+          <div className="label">Itens vendidos</div>
+          <div className="value">{d.itemsSold}</div>
+        </div>
+        <div className="card">
+          <div className="label">Pedidos em aberto</div>
+          <div className="value">{pending}</div>
+        </div>
+        <div className="card">
+          <div className="label">Pedidos</div>
+          <div className="value">{d.orders.length}</div>
+        </div>
+        <div className="card">
+          <div className="label">Despesas</div>
+          <div className="value">{money(d.costs)}</div>
+        </div>
+      </div>
+      <div className="grid" style={{ gridTemplateColumns: "2fr 1fr", marginTop: 18 }}>
+        <div className="card">
+          <div className="section-title">
+            <h2>Vendas por categoria</h2>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Categoria</th>
+                  <th>Itens</th>
+                  <th>Vendido</th>
+                  <th>Recebido</th>
+                  <th>Lucro</th>
+                  <th>A receber</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.categories.map((r: any) => (
+                  <tr key={r.category}>
+                    <td>
+                      <strong>{r.category}</strong>
+                    </td>
+                    <td>{r.qty}</td>
+                    <td>{money(r.sales)}</td>
+                    <td>{money(r.received)}</td>
+                    <td>{money(r.profit)}</td>
+                    <td>{money(r.receivable)}</td>
+                  </tr>
+                ))}
+                {!d.categories.length && (
+                  <tr>
+                    <td colSpan={6} className="muted">
+                      Nenhuma venda ainda.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="card">
+          <h2>Produção</h2>
+          <p className="muted">Fila atual</p>
+          <div className="grid" style={{ marginTop: 16 }}>
+            {[
+              ["pending", "Aguardando"],
+              ["in_progress", "Em produção"],
+              ["completed", "Concluída"],
+            ].map(([s, l]) => (
+              <div key={s} style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>{l}</span>
+                <strong>{d.production.filter((p) => p.status === s).length}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

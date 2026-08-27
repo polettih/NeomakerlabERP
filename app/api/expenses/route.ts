@@ -12,10 +12,13 @@ export async function POST(request: Request) {
     if (!Number.isFinite(amount) || amount <= 0) {
       return NextResponse.json({ error: "Informe um valor válido." }, { status: 400 });
     }
-    const category = body.category && EXPENSE_CATEGORIES.includes(body.category) ? body.category : (body.category || null);
+    const category =
+      body.category && EXPENSE_CATEGORIES.includes(body.category)
+        ? body.category
+        : body.category || null;
     const status = body.status === "paid" ? "paid" : "pending";
     const dueDate = body.due_date || null;
-    const paidAt = status === "paid" ? (body.paid_at || new Date().toISOString()) : null;
+    const paidAt = status === "paid" ? body.paid_at || new Date().toISOString() : null;
 
     const { supabase, organizationId } = await requireUser();
     const { data, error } = await supabase

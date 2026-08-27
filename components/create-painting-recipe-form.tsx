@@ -1,3 +1,142 @@
 "use client";
-import {FormEvent,useState} from "react"; import {useRouter} from "next/navigation";
-export function CreatePaintingRecipeForm({products}:{products:{id:string,name:string}[]}) { const r=useRouter(); const [name,setName]=useState(""); const [category,setCategory]=useState("Geral"); const [description,setDescription]=useState(""); const [colors,setColors]=useState(""); const [dilution,setDilution]=useState(""); const [finish,setFinish]=useState("Fosco"); const [notes,setNotes]=useState(""); const [productId,setProductId]=useState(""); const [error,setError]=useState(""); async function submit(e:FormEvent){e.preventDefault();setError("");const res=await fetch("/api/painting-recipes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,category,description,colors:colors.split(",").map(x=>x.trim()).filter(Boolean),dilution,finish,notes,product_id:productId||null})});const j=await res.json();if(!res.ok)setError(j.error||"Erro");else{setName("");setDescription("");setColors("");setDilution("");setNotes("");setProductId("");r.refresh();}} return <form onSubmit={submit} className="card grid"><h2>Nova receita</h2>{error&&<div className="error">{error}</div>}<div className="field"><label>Nome</label><input className="input" value={name} onChange={e=>setName(e.target.value)} required placeholder="Ex.: Pele clara - Cammy"/></div><div className="form-grid"><div className="field"><label>Categoria</label><select className="select" value={category} onChange={e=>setCategory(e.target.value)}>{["Geral","Pele","Cabelo","Cores","Sombras","Luzes","Metal","Materiais"].map(x=><option key={x}>{x}</option>)}</select></div><div className="field"><label>Produto relacionado</label><select className="select" value={productId} onChange={e=>setProductId(e.target.value)}><option value="">Nenhum</option>{products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div></div><div className="field"><label>Descrição</label><textarea className="textarea" value={description} onChange={e=>setDescription(e.target.value)} placeholder="Como preparar e aplicar"/></div><div className="field"><label>Cores (separe por vírgulas)</label><input className="input" value={colors} onChange={e=>setColors(e.target.value)} placeholder="Vermelho, vinho, marrom"/></div><div className="form-grid"><div className="field"><label>Diluição</label><input className="input" value={dilution} onChange={e=>setDilution(e.target.value)} placeholder="20-30% de diluente"/></div><div className="field"><label>Acabamento</label><select className="select" value={finish} onChange={e=>setFinish(e.target.value)}><option>Fosco</option><option>Acetinado</option><option>Brilhante</option><option>Metálico</option></select></div></div><div className="field"><label>Observações</label><textarea className="textarea" value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Sombras, luzes, número de camadas etc."/></div><button className="btn btn-primary">Salvar receita</button></form>; }
+import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
+export function CreatePaintingRecipeForm({
+  products,
+}: {
+  products: { id: string; name: string }[];
+}) {
+  const r = useRouter();
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("Geral");
+  const [description, setDescription] = useState("");
+  const [colors, setColors] = useState("");
+  const [dilution, setDilution] = useState("");
+  const [finish, setFinish] = useState("Fosco");
+  const [notes, setNotes] = useState("");
+  const [productId, setProductId] = useState("");
+  const [error, setError] = useState("");
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    const res = await fetch("/api/painting-recipes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        category,
+        description,
+        colors: colors
+          .split(",")
+          .map((x) => x.trim())
+          .filter(Boolean),
+        dilution,
+        finish,
+        notes,
+        product_id: productId || null,
+      }),
+    });
+    const j = await res.json();
+    if (!res.ok) setError(j.error || "Erro");
+    else {
+      setName("");
+      setDescription("");
+      setColors("");
+      setDilution("");
+      setNotes("");
+      setProductId("");
+      r.refresh();
+    }
+  }
+  return (
+    <form onSubmit={submit} className="card grid">
+      <h2>Nova receita</h2>
+      {error && <div className="error">{error}</div>}
+      <div className="field">
+        <label>Nome</label>
+        <input
+          className="input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+          placeholder="Ex.: Pele clara - Cammy"
+        />
+      </div>
+      <div className="form-grid">
+        <div className="field">
+          <label>Categoria</label>
+          <select className="select" value={category} onChange={(e) => setCategory(e.target.value)}>
+            {["Geral", "Pele", "Cabelo", "Cores", "Sombras", "Luzes", "Metal", "Materiais"].map(
+              (x) => (
+                <option key={x}>{x}</option>
+              )
+            )}
+          </select>
+        </div>
+        <div className="field">
+          <label>Produto relacionado</label>
+          <select
+            className="select"
+            value={productId}
+            onChange={(e) => setProductId(e.target.value)}
+          >
+            <option value="">Nenhum</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="field">
+        <label>Descrição</label>
+        <textarea
+          className="textarea"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Como preparar e aplicar"
+        />
+      </div>
+      <div className="field">
+        <label>Cores (separe por vírgulas)</label>
+        <input
+          className="input"
+          value={colors}
+          onChange={(e) => setColors(e.target.value)}
+          placeholder="Vermelho, vinho, marrom"
+        />
+      </div>
+      <div className="form-grid">
+        <div className="field">
+          <label>Diluição</label>
+          <input
+            className="input"
+            value={dilution}
+            onChange={(e) => setDilution(e.target.value)}
+            placeholder="20-30% de diluente"
+          />
+        </div>
+        <div className="field">
+          <label>Acabamento</label>
+          <select className="select" value={finish} onChange={(e) => setFinish(e.target.value)}>
+            <option>Fosco</option>
+            <option>Acetinado</option>
+            <option>Brilhante</option>
+            <option>Metálico</option>
+          </select>
+        </div>
+      </div>
+      <div className="field">
+        <label>Observações</label>
+        <textarea
+          className="textarea"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Sombras, luzes, número de camadas etc."
+        />
+      </div>
+      <button className="btn btn-primary">Salvar receita</button>
+    </form>
+  );
+}

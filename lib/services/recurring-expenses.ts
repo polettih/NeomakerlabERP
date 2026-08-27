@@ -17,7 +17,7 @@ type RecurringExpense = {
  */
 export async function ensureRecurringExpensesForCurrentMonth(
   supabase: SupabaseClient,
-  organizationId: string,
+  organizationId: string
 ) {
   const { data: recurring, error } = await supabase
     .from("recurring_expenses")
@@ -46,10 +46,8 @@ export async function ensureRecurringExpensesForCurrentMonth(
     };
   });
 
-  await supabase
-    .from("expenses")
-    .upsert(rows, {
-      onConflict: "source_type,source_id,generated_period",
-      ignoreDuplicates: true,
-    });
+  await supabase.from("expenses").upsert(rows, {
+    onConflict: "source_type,source_id,generated_period",
+    ignoreDuplicates: true,
+  });
 }

@@ -1,11 +1,174 @@
 "use client";
-import {useMemo,useState} from "react"; import {useRouter} from "next/navigation";
-const labels=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-const statusLabel:any={new:'Novo',preparation:'Preparação',production:'Produção',finishing:'Acabamento',packaging:'Embalagem',shipped:'Enviado',delivered:'Finalizado',cancelled:'Cancelado'};
-const statusClass:any={new:'cal-new',preparation:'cal-prep',production:'cal-production',finishing:'cal-finishing',packaging:'cal-packaging',shipped:'cal-shipped',delivered:'cal-done',cancelled:'cal-cancelled'};
-function dateKey(d:Date){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
-export function InteractiveCalendar({orders}:{orders:any[]}){const [cursor,setCursor]=useState(()=>new Date());const [selected,setSelected]=useState<string|null>(null);const r=useRouter();
- const cells=useMemo(()=>{const y=cursor.getFullYear(),m=cursor.getMonth();const first=new Date(y,m,1);const start=new Date(y,m,1-first.getDay());return Array.from({length:42},(_,i)=>{const d=new Date(start);d.setDate(start.getDate()+i);return d})},[cursor]);
- const byDay=useMemo(()=>{const map:any={};orders.forEach(o=>{const eventDate=o.status==='delivered'&&o.completed_at?o.completed_at:o.expected_date;if(!eventDate)return;const k=dateKey(new Date(eventDate));(map[k]??=[]).push(o)});return map},[orders]);
- async function move(o:any,k:string){const sourceDate=o.status==='delivered'&&o.completed_at?o.completed_at:o.expected_date;if(!sourceDate)return;const old=new Date(sourceDate);const [yy,mm,dd]=k.split('-').map(Number);const n=new Date(yy,mm-1,dd,old.getHours(),old.getMinutes());const res=await fetch(`/api/orders/${o.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(o.status==='delivered'?{completed_at:n.toISOString()}:{expected_date:n.toISOString()})});if(!res.ok){const j=await res.json();alert(j.error||'Não foi possível mover o evento.')}else r.refresh()}
- const title=cursor.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}); return <div className="calendar-shell"><div className="calendar-toolbar"><div className="calendar-nav"><button className="btn btn-secondary" onClick={()=>setCursor(new Date(cursor.getFullYear(),cursor.getMonth()-1,1))}>‹</button><button className="btn btn-secondary" onClick={()=>setCursor(new Date())}>Hoje</button><button className="btn btn-secondary" onClick={()=>setCursor(new Date(cursor.getFullYear(),cursor.getMonth()+1,1))}>›</button></div><h2>{title.charAt(0).toUpperCase()+title.slice(1)}</h2></div><div className="calendar-grid">{labels.map(l=><div className="calendar-weekday" key={l}>{l}</div>)}{cells.map(d=>{const k=dateKey(d);const events=byDay[k]||[];const muted=d.getMonth()!==cursor.getMonth();return <div key={k} className={`calendar-cell ${muted?'muted-day':''} ${selected===k?'selected-day':''}`} onClick={()=>setSelected(k)} onDragOver={e=>e.preventDefault()} onDrop={e=>{const id=e.dataTransfer.getData('orderId');const o=orders.find(x=>x.id===id);if(o)move(o,k)}}><div className="calendar-day-number">{d.getDate()}</div><div className="calendar-events">{events.map((o:any)=><div key={o.id} draggable onDragStart={e=>e.dataTransfer.setData('orderId',o.id)} onClick={e=>{e.stopPropagation();setSelected(k)}} className={`calendar-event-pill ${statusClass[o.status]||''}`}><strong>{o.customers?.name||'Pedido'}</strong><span>{o.order_items?.map((i:any)=>i.product_name).join(', ')||'Sem produto'}</span><small>{statusLabel[o.status]||o.status}</small></div>)}</div></div>})}</div>{selected&&<div className="calendar-details card"><div><h3>Agenda de {new Date(selected+'T12:00:00').toLocaleDateString('pt-BR')}</h3><p className="muted">{(byDay[selected]||[]).length} compromisso(s) programado(s).</p></div>{(byDay[selected]||[]).map((o:any)=><div className="detail-event" key={o.id}><div><strong>{o.customers?.name||'Pedido'}</strong><div className="muted">{o.order_items?.map((i:any)=>`${i.product_name} × ${i.quantity}`).join(' • ')}</div></div><span className={`badge ${statusClass[o.status]||''}`}>{statusLabel[o.status]||o.status}</span></div>)}{!(byDay[selected]||[]).length&&<p className="muted">Nenhum pedido neste dia. Crie um pedido ou informe uma data de conclusão para adicioná-lo.</p>}</div>}</div>}
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+const labels = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const statusLabel: any = {
+  new: "Novo",
+  preparation: "Preparação",
+  production: "Produção",
+  finishing: "Acabamento",
+  packaging: "Embalagem",
+  shipped: "Enviado",
+  delivered: "Finalizado",
+  cancelled: "Cancelado",
+};
+const statusClass: any = {
+  new: "cal-new",
+  preparation: "cal-prep",
+  production: "cal-production",
+  finishing: "cal-finishing",
+  packaging: "cal-packaging",
+  shipped: "cal-shipped",
+  delivered: "cal-done",
+  cancelled: "cal-cancelled",
+};
+function dateKey(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+export function InteractiveCalendar({ orders }: { orders: any[] }) {
+  const [cursor, setCursor] = useState(() => new Date());
+  const [selected, setSelected] = useState<string | null>(null);
+  const r = useRouter();
+  const cells = useMemo(() => {
+    const y = cursor.getFullYear(),
+      m = cursor.getMonth();
+    const first = new Date(y, m, 1);
+    const start = new Date(y, m, 1 - first.getDay());
+    return Array.from({ length: 42 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return d;
+    });
+  }, [cursor]);
+  const byDay = useMemo(() => {
+    const map: any = {};
+    orders.forEach((o) => {
+      const eventDate =
+        o.status === "delivered" && o.completed_at ? o.completed_at : o.expected_date;
+      if (!eventDate) return;
+      const k = dateKey(new Date(eventDate));
+      (map[k] ??= []).push(o);
+    });
+    return map;
+  }, [orders]);
+  async function move(o: any, k: string) {
+    const sourceDate =
+      o.status === "delivered" && o.completed_at ? o.completed_at : o.expected_date;
+    if (!sourceDate) return;
+    const old = new Date(sourceDate);
+    const [yy, mm, dd] = k.split("-").map(Number);
+    const n = new Date(yy, mm - 1, dd, old.getHours(), old.getMinutes());
+    const res = await fetch(`/api/orders/${o.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        o.status === "delivered"
+          ? { completed_at: n.toISOString() }
+          : { expected_date: n.toISOString() }
+      ),
+    });
+    if (!res.ok) {
+      const j = await res.json();
+      alert(j.error || "Não foi possível mover o evento.");
+    } else r.refresh();
+  }
+  const title = cursor.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  return (
+    <div className="calendar-shell">
+      <div className="calendar-toolbar">
+        <div className="calendar-nav">
+          <button
+            className="btn btn-secondary"
+            onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
+          >
+            ‹
+          </button>
+          <button className="btn btn-secondary" onClick={() => setCursor(new Date())}>
+            Hoje
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
+          >
+            ›
+          </button>
+        </div>
+        <h2>{title.charAt(0).toUpperCase() + title.slice(1)}</h2>
+      </div>
+      <div className="calendar-grid">
+        {labels.map((l) => (
+          <div className="calendar-weekday" key={l}>
+            {l}
+          </div>
+        ))}
+        {cells.map((d) => {
+          const k = dateKey(d);
+          const events = byDay[k] || [];
+          const muted = d.getMonth() !== cursor.getMonth();
+          return (
+            <div
+              key={k}
+              className={`calendar-cell ${muted ? "muted-day" : ""} ${selected === k ? "selected-day" : ""}`}
+              onClick={() => setSelected(k)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                const id = e.dataTransfer.getData("orderId");
+                const o = orders.find((x) => x.id === id);
+                if (o) move(o, k);
+              }}
+            >
+              <div className="calendar-day-number">{d.getDate()}</div>
+              <div className="calendar-events">
+                {events.map((o: any) => (
+                  <div
+                    key={o.id}
+                    draggable
+                    onDragStart={(e) => e.dataTransfer.setData("orderId", o.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelected(k);
+                    }}
+                    className={`calendar-event-pill ${statusClass[o.status] || ""}`}
+                  >
+                    <strong>{o.customers?.name || "Pedido"}</strong>
+                    <span>
+                      {o.order_items?.map((i: any) => i.product_name).join(", ") || "Sem produto"}
+                    </span>
+                    <small>{statusLabel[o.status] || o.status}</small>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {selected && (
+        <div className="calendar-details card">
+          <div>
+            <h3>Agenda de {new Date(selected + "T12:00:00").toLocaleDateString("pt-BR")}</h3>
+            <p className="muted">{(byDay[selected] || []).length} compromisso(s) programado(s).</p>
+          </div>
+          {(byDay[selected] || []).map((o: any) => (
+            <div className="detail-event" key={o.id}>
+              <div>
+                <strong>{o.customers?.name || "Pedido"}</strong>
+                <div className="muted">
+                  {o.order_items?.map((i: any) => `${i.product_name} × ${i.quantity}`).join(" • ")}
+                </div>
+              </div>
+              <span className={`badge ${statusClass[o.status] || ""}`}>
+                {statusLabel[o.status] || o.status}
+              </span>
+            </div>
+          ))}
+          {!(byDay[selected] || []).length && (
+            <p className="muted">
+              Nenhum pedido neste dia. Crie um pedido ou informe uma data de conclusão para
+              adicioná-lo.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

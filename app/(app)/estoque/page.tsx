@@ -1,2 +1,4 @@
-import {redirect} from 'next/navigation';
-export default function EstoquePage(){redirect('/gastos-e-compras')}
+import { redirect } from "next/navigation";
+export default function EstoquePage() {
+  redirect("/gastos-e-compras");
+}

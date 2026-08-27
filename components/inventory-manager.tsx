@@ -1,18 +1,462 @@
 "use client";
-import {FormEvent,useMemo,useState} from 'react'; import {useRouter} from 'next/navigation';
-type Material={id:string;name:string;category:string;material_type:string;unit:string;quantity_on_hand:number;minimum_stock:number;average_cost:number;supplier?:string;color_name?:string;color_hex?:string;active?:boolean};
-const money=(n:number)=>n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); const typeUnit=(t:string)=>t==='Filamento'?'g':t==='Resina'?'ml':'un';
-export function InventoryManager({materials}:{materials:Material[]}){const r=useRouter();const empty={name:'',category:'Insumos',material_type:'Filamento',unit:'g',color_name:'',color_hex:'#808080',minimum_stock:'0',supplier:''};const [form,setForm]=useState(empty);const [editing,setEditing]=useState<Material|null>(null);const [purchase,setPurchase]=useState({material_id:materials[0]?.id||'',quantity:'',total_cost:'',supplier:'',notes:''});const [use,setUse]=useState({material_id:materials[0]?.id||'',quantity:'',description:''});const [filter,setFilter]=useState('Todos');const [error,setError]=useState('');const filtered=useMemo(()=>filter==='Todos'?materials:materials.filter(m=>m.material_type===filter),[materials,filter]);
- function updateForm(k:string,v:string){const next={...form,[k]:v} as typeof form;if(k==='material_type')next.unit=typeUnit(v);setForm(next)}
- function startEdit(m:Material){setEditing(m);setForm({name:m.name,category:m.category,material_type:m.material_type,unit:m.unit,color_name:m.color_name||'',color_hex:m.color_hex||'#808080',minimum_stock:String(m.minimum_stock||0),supplier:m.supplier||''});setError('');}
- function cancelEdit(){setEditing(null);setForm(empty);setError('')}
- async function send(url:string,method:string,body:any){const res=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await res.json();if(!res.ok)throw new Error(j.error||'Erro');return j}
- async function save(e:FormEvent){e.preventDefault();setError('');try{await send('/api/materials',editing?'PATCH':'POST',editing?{...form,id:editing.id}:{...form});cancelEdit();r.refresh()}catch(e:any){setError(e.message)}}
- async function remove(m:Material){if(!confirm(`Excluir "${m.name}"? Ele ficará oculto de novos lançamentos, preservando o histórico.`))return;try{await send('/api/materials','DELETE',{id:m.id});r.refresh()}catch(e:any){setError(e.message)}}
- async function buy(e:FormEvent){e.preventDefault();setError('');try{await send('/api/material-purchases','POST',purchase);setPurchase({...purchase,quantity:'',total_cost:'',notes:''});r.refresh()}catch(e:any){setError(e.message)}}
- async function consume(e:FormEvent){e.preventDefault();setError('');try{await send('/api/stock-movements','POST',{...use,quantity:-Math.abs(Number(use.quantity)),movement_type:'manual_consumption'});setUse({...use,quantity:'',description:''});r.refresh()}catch(e:any){setError(e.message)}}
- const selected=materials.find(m=>m.id===purchase.material_id); return <div className="grid" style={{gap:18}}>{error&&<div className="error">{error}</div>}
- <div className="section-title"><div><h2>📦 Gestão de estoque e compras</h2><p className="muted">Cadastre, compre, consuma e corrija materiais em um único fluxo.</p></div><div className="form-grid"><button type="button" className={`btn ${filter==='Todos'?'btn-primary':'btn-secondary'}`} onClick={()=>setFilter('Todos')}>Todos</button><button type="button" className={`btn ${filter==='Filamento'?'btn-primary':'btn-secondary'}`} onClick={()=>setFilter('Filamento')}>Filamentos</button><button type="button" className={`btn ${filter==='Resina'?'btn-primary':'btn-secondary'}`} onClick={()=>setFilter('Resina')}>Resinas</button><button type="button" className={`btn ${filter==='Outro'?'btn-primary':'btn-secondary'}`} onClick={()=>setFilter('Outro')}>Outros</button></div></div>
- <div className="grid two-col"><form className="card grid" onSubmit={save}><div className="section-title"><h2>{editing?'✏️ Editar material':'＋ Novo material'}</h2>{editing&&<button type="button" className="btn btn-secondary btn-sm" onClick={cancelEdit}>Cancelar</button>}</div><div className="field"><label>Nome / marca</label><input className="input" value={form.name} onChange={e=>updateForm('name',e.target.value)} placeholder="Ex.: PLA Matte" required/></div><div className="form-grid"><div className="field"><label>Tipo</label><select className="select" value={form.material_type} onChange={e=>updateForm('material_type',e.target.value)}><option>Filamento</option><option>Resina</option><option>Outro</option></select></div><div className="field"><label>Categoria</label><select className="select" value={form.category} onChange={e=>setForm({...form,category:e.target.value})}><option>Insumos</option><option>Ferramentas</option><option>Maquinários</option></select></div><div className="field"><label>Unidade</label><input className="input" value={form.unit} readOnly/></div><div className="field"><label>Estoque mínimo</label><input className="input" type="number" step="0.001" min="0" value={form.minimum_stock} onChange={e=>setForm({...form,minimum_stock:e.target.value})}/></div></div>{form.material_type!=='Outro'&&<div className="form-grid"><div className="field"><label>Cor</label><input className="input" value={form.color_name} onChange={e=>setForm({...form,color_name:e.target.value})} required/></div><div className="field"><label>Cor visual</label><input className="input" type="color" value={form.color_hex} onChange={e=>setForm({...form,color_hex:e.target.value})} style={{height:42,padding:4}}/></div></div>}<div className="field"><label>Fornecedor</label><input className="input" value={form.supplier} onChange={e=>setForm({...form,supplier:e.target.value})}/></div><button className="btn btn-primary">{editing?'Salvar alterações':'Cadastrar material'}</button></form>
- <div className="grid"><form className="card grid" onSubmit={buy}><h2>🛒 Registrar compra</h2><div className="field"><label>Material</label><select className="select" required value={purchase.material_id} onChange={e=>setPurchase({...purchase,material_id:e.target.value})}>{materials.map(m=><option key={m.id} value={m.id}>{m.name}{m.color_name?` — ${m.color_name}`:''}</option>)}</select></div><div className="form-grid"><div className="field"><label>Quantidade ({selected?.unit||'un'})</label><input className="input" type="number" step="0.001" min="0.001" value={purchase.quantity} onChange={e=>setPurchase({...purchase,quantity:e.target.value})} required/></div><div className="field"><label>Valor pago</label><input className="input" type="number" step="0.01" min="0" value={purchase.total_cost} onChange={e=>setPurchase({...purchase,total_cost:e.target.value})} required/></div></div><p className="muted">Custo: {purchase.quantity&&purchase.total_cost?money(Number(purchase.total_cost)/Number(purchase.quantity)):`R$ 0,00`}/{selected?.unit||'un'}</p><button className="btn btn-primary" disabled={!materials.length}>Adicionar ao estoque</button></form><form className="card grid" onSubmit={consume}><h2>➖ Consumo / ajuste</h2><div className="field"><label>Material</label><select className="select" required value={use.material_id} onChange={e=>setUse({...use,material_id:e.target.value})}>{materials.map(m=><option key={m.id} value={m.id}>{m.name}{m.color_name?` — ${m.color_name}`:''}</option>)}</select></div><div className="field"><label>Quantidade consumida</label><input className="input" type="number" step="0.001" min="0.001" value={use.quantity} onChange={e=>setUse({...use,quantity:e.target.value})} required/></div><div className="field"><label>Motivo</label><input className="input" value={use.description} onChange={e=>setUse({...use,description:e.target.value})} placeholder="Teste, impressão perdida, manutenção..."/></div><button className="btn btn-secondary" disabled={!materials.length}>Baixar material</button></form></div></div>
- <div className="card table-wrap"><div className="section-title"><div><h2>Estoque atual</h2><p className="muted">Edite ou desative registros feitos incorretamente.</p></div></div><table><thead><tr><th>Material</th><th>Tipo</th><th>Cor</th><th>Estoque</th><th>Custo</th><th>Valor</th><th>Status</th><th>Ações</th></tr></thead><tbody>{filtered.map(m=><tr key={m.id}><td><strong>{m.name}</strong></td><td>{m.material_type}</td><td>{m.material_type!=='Outro'?<span style={{display:'inline-flex',alignItems:'center',gap:7}}><span style={{width:16,height:16,borderRadius:'50%',background:m.color_hex||'#888',border:'1px solid #999'}}></span>{m.color_name||'-'}</span>:'-'}</td><td>{Number(m.quantity_on_hand).toLocaleString('pt-BR',{maximumFractionDigits:3})} {m.unit}</td><td>{money(Number(m.average_cost))}/{m.unit}</td><td>{money(Number(m.quantity_on_hand)*Number(m.average_cost))}</td><td><span className={`badge ${Number(m.quantity_on_hand)<=Number(m.minimum_stock)?'yellow':'green'}`}>{Number(m.quantity_on_hand)<=Number(m.minimum_stock)?'Baixo':'Normal'}</span></td><td><div className="actions"><button className="btn btn-secondary btn-sm" onClick={()=>startEdit(m)}>Editar</button><button className="btn btn-danger btn-sm" onClick={()=>remove(m)}>Excluir</button></div></td></tr>)}{!filtered.length&&<tr><td colSpan={8} className="muted">Nenhum material cadastrado.</td></tr>}</tbody></table></div></div>}
+import { FormEvent, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+type Material = {
+  id: string;
+  name: string;
+  category: string;
+  material_type: string;
+  unit: string;
+  quantity_on_hand: number;
+  minimum_stock: number;
+  average_cost: number;
+  supplier?: string;
+  color_name?: string;
+  color_hex?: string;
+  active?: boolean;
+};
+const money = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const typeUnit = (t: string) => (t === "Filamento" ? "g" : t === "Resina" ? "ml" : "un");
+export function InventoryManager({ materials }: { materials: Material[] }) {
+  const r = useRouter();
+  const empty = {
+    name: "",
+    category: "Insumos",
+    material_type: "Filamento",
+    unit: "g",
+    color_name: "",
+    color_hex: "#808080",
+    minimum_stock: "0",
+    supplier: "",
+  };
+  const [form, setForm] = useState(empty);
+  const [editing, setEditing] = useState<Material | null>(null);
+  const [purchase, setPurchase] = useState({
+    material_id: materials[0]?.id || "",
+    quantity: "",
+    total_cost: "",
+    supplier: "",
+    notes: "",
+  });
+  const [use, setUse] = useState({
+    material_id: materials[0]?.id || "",
+    quantity: "",
+    description: "",
+  });
+  const [filter, setFilter] = useState("Todos");
+  const [error, setError] = useState("");
+  const filtered = useMemo(
+    () => (filter === "Todos" ? materials : materials.filter((m) => m.material_type === filter)),
+    [materials, filter]
+  );
+  function updateForm(k: string, v: string) {
+    const next = { ...form, [k]: v } as typeof form;
+    if (k === "material_type") next.unit = typeUnit(v);
+    setForm(next);
+  }
+  function startEdit(m: Material) {
+    setEditing(m);
+    setForm({
+      name: m.name,
+      category: m.category,
+      material_type: m.material_type,
+      unit: m.unit,
+      color_name: m.color_name || "",
+      color_hex: m.color_hex || "#808080",
+      minimum_stock: String(m.minimum_stock || 0),
+      supplier: m.supplier || "",
+    });
+    setError("");
+  }
+  function cancelEdit() {
+    setEditing(null);
+    setForm(empty);
+    setError("");
+  }
+  async function send(url: string, method: string, body: any) {
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || "Erro");
+    return j;
+  }
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    try {
+      await send(
+        "/api/materials",
+        editing ? "PATCH" : "POST",
+        editing ? { ...form, id: editing.id } : { ...form }
+      );
+      cancelEdit();
+      r.refresh();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
+  async function remove(m: Material) {
+    if (
+      !confirm(
+        `Excluir "${m.name}"? Ele ficará oculto de novos lançamentos, preservando o histórico.`
+      )
+    )
+      return;
+    try {
+      await send("/api/materials", "DELETE", { id: m.id });
+      r.refresh();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
+  async function buy(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    try {
+      await send("/api/material-purchases", "POST", purchase);
+      setPurchase({ ...purchase, quantity: "", total_cost: "", notes: "" });
+      r.refresh();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
+  async function consume(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    try {
+      await send("/api/stock-movements", "POST", {
+        ...use,
+        quantity: -Math.abs(Number(use.quantity)),
+        movement_type: "manual_consumption",
+      });
+      setUse({ ...use, quantity: "", description: "" });
+      r.refresh();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
+  const selected = materials.find((m) => m.id === purchase.material_id);
+  return (
+    <div className="grid" style={{ gap: 18 }}>
+      {error && <div className="error">{error}</div>}
+      <div className="section-title">
+        <div>
+          <h2>📦 Gestão de estoque e compras</h2>
+          <p className="muted">Cadastre, compre, consuma e corrija materiais em um único fluxo.</p>
+        </div>
+        <div className="form-grid">
+          <button
+            type="button"
+            className={`btn ${filter === "Todos" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setFilter("Todos")}
+          >
+            Todos
+          </button>
+          <button
+            type="button"
+            className={`btn ${filter === "Filamento" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setFilter("Filamento")}
+          >
+            Filamentos
+          </button>
+          <button
+            type="button"
+            className={`btn ${filter === "Resina" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setFilter("Resina")}
+          >
+            Resinas
+          </button>
+          <button
+            type="button"
+            className={`btn ${filter === "Outro" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setFilter("Outro")}
+          >
+            Outros
+          </button>
+        </div>
+      </div>
+      <div className="grid two-col">
+        <form className="card grid" onSubmit={save}>
+          <div className="section-title">
+            <h2>{editing ? "✏️ Editar material" : "＋ Novo material"}</h2>
+            {editing && (
+              <button type="button" className="btn btn-secondary btn-sm" onClick={cancelEdit}>
+                Cancelar
+              </button>
+            )}
+          </div>
+          <div className="field">
+            <label>Nome / marca</label>
+            <input
+              className="input"
+              value={form.name}
+              onChange={(e) => updateForm("name", e.target.value)}
+              placeholder="Ex.: PLA Matte"
+              required
+            />
+          </div>
+          <div className="form-grid">
+            <div className="field">
+              <label>Tipo</label>
+              <select
+                className="select"
+                value={form.material_type}
+                onChange={(e) => updateForm("material_type", e.target.value)}
+              >
+                <option>Filamento</option>
+                <option>Resina</option>
+                <option>Outro</option>
+              </select>
+            </div>
+            <div className="field">
+              <label>Categoria</label>
+              <select
+                className="select"
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+              >
+                <option>Insumos</option>
+                <option>Ferramentas</option>
+                <option>Maquinários</option>
+              </select>
+            </div>
+            <div className="field">
+              <label>Unidade</label>
+              <input className="input" value={form.unit} readOnly />
+            </div>
+            <div className="field">
+              <label>Estoque mínimo</label>
+              <input
+                className="input"
+                type="number"
+                step="0.001"
+                min="0"
+                value={form.minimum_stock}
+                onChange={(e) => setForm({ ...form, minimum_stock: e.target.value })}
+              />
+            </div>
+          </div>
+          {form.material_type !== "Outro" && (
+            <div className="form-grid">
+              <div className="field">
+                <label>Cor</label>
+                <input
+                  className="input"
+                  value={form.color_name}
+                  onChange={(e) => setForm({ ...form, color_name: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label>Cor visual</label>
+                <input
+                  className="input"
+                  type="color"
+                  value={form.color_hex}
+                  onChange={(e) => setForm({ ...form, color_hex: e.target.value })}
+                  style={{ height: 42, padding: 4 }}
+                />
+              </div>
+            </div>
+          )}
+          <div className="field">
+            <label>Fornecedor</label>
+            <input
+              className="input"
+              value={form.supplier}
+              onChange={(e) => setForm({ ...form, supplier: e.target.value })}
+            />
+          </div>
+          <button className="btn btn-primary">
+            {editing ? "Salvar alterações" : "Cadastrar material"}
+          </button>
+        </form>
+        <div className="grid">
+          <form className="card grid" onSubmit={buy}>
+            <h2>🛒 Registrar compra</h2>
+            <div className="field">
+              <label>Material</label>
+              <select
+                className="select"
+                required
+                value={purchase.material_id}
+                onChange={(e) => setPurchase({ ...purchase, material_id: e.target.value })}
+              >
+                {materials.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                    {m.color_name ? ` — ${m.color_name}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-grid">
+              <div className="field">
+                <label>Quantidade ({selected?.unit || "un"})</label>
+                <input
+                  className="input"
+                  type="number"
+                  step="0.001"
+                  min="0.001"
+                  value={purchase.quantity}
+                  onChange={(e) => setPurchase({ ...purchase, quantity: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="field">
+                <label>Valor pago</label>
+                <input
+                  className="input"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={purchase.total_cost}
+                  onChange={(e) => setPurchase({ ...purchase, total_cost: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+            <p className="muted">
+              Custo:{" "}
+              {purchase.quantity && purchase.total_cost
+                ? money(Number(purchase.total_cost) / Number(purchase.quantity))
+                : `R$ 0,00`}
+              /{selected?.unit || "un"}
+            </p>
+            <button className="btn btn-primary" disabled={!materials.length}>
+              Adicionar ao estoque
+            </button>
+          </form>
+          <form className="card grid" onSubmit={consume}>
+            <h2>➖ Consumo / ajuste</h2>
+            <div className="field">
+              <label>Material</label>
+              <select
+                className="select"
+                required
+                value={use.material_id}
+                onChange={(e) => setUse({ ...use, material_id: e.target.value })}
+              >
+                {materials.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                    {m.color_name ? ` — ${m.color_name}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>Quantidade consumida</label>
+              <input
+                className="input"
+                type="number"
+                step="0.001"
+                min="0.001"
+                value={use.quantity}
+                onChange={(e) => setUse({ ...use, quantity: e.target.value })}
+                required
+              />
+            </div>
+            <div className="field">
+              <label>Motivo</label>
+              <input
+                className="input"
+                value={use.description}
+                onChange={(e) => setUse({ ...use, description: e.target.value })}
+                placeholder="Teste, impressão perdida, manutenção..."
+              />
+            </div>
+            <button className="btn btn-secondary" disabled={!materials.length}>
+              Baixar material
+            </button>
+          </form>
+        </div>
+      </div>
+      <div className="card table-wrap">
+        <div className="section-title">
+          <div>
+            <h2>Estoque atual</h2>
+            <p className="muted">Edite ou desative registros feitos incorretamente.</p>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Material</th>
+              <th>Tipo</th>
+              <th>Cor</th>
+              <th>Estoque</th>
+              <th>Custo</th>
+              <th>Valor</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((m) => (
+              <tr key={m.id}>
+                <td>
+                  <strong>{m.name}</strong>
+                </td>
+                <td>{m.material_type}</td>
+                <td>
+                  {m.material_type !== "Outro" ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                      <span
+                        style={{
+                          width: 16,
+                          height: 16,
+                          borderRadius: "50%",
+                          background: m.color_hex || "#888",
+                          border: "1px solid #999",
+                        }}
+                      ></span>
+                      {m.color_name || "-"}
+                    </span>
+                  ) : (
+                    "-"
+                  )}
+                </td>
+                <td>
+                  {Number(m.quantity_on_hand).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}{" "}
+                  {m.unit}
+                </td>
+                <td>
+                  {money(Number(m.average_cost))}/{m.unit}
+                </td>
+                <td>{money(Number(m.quantity_on_hand) * Number(m.average_cost))}</td>
+                <td>
+                  <span
+                    className={`badge ${Number(m.quantity_on_hand) <= Number(m.minimum_stock) ? "yellow" : "green"}`}
+                  >
+                    {Number(m.quantity_on_hand) <= Number(m.minimum_stock) ? "Baixo" : "Normal"}
+                  </span>
+                </td>
+                <td>
+                  <div className="actions">
+                    <button className="btn btn-secondary btn-sm" onClick={() => startEdit(m)}>
+                      Editar
+                    </button>
+                    <button className="btn btn-danger btn-sm" onClick={() => remove(m)}>
+                      Excluir
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {!filtered.length && (
+              <tr>
+                <td colSpan={8} className="muted">
+                  Nenhum material cadastrado.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

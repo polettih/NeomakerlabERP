@@ -8,6 +8,13 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
 };
 
-export default function RootLayout({children}:{children:React.ReactNode}) {
-  return <html lang="pt-BR"><body><PwaRegister />{children}</body></html>;
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="pt-BR">
+      <body>
+        <PwaRegister />
+        {children}
+      </body>
+    </html>
+  );
 }

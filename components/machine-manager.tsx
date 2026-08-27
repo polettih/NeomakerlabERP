@@ -1,2 +1,227 @@
-"use client"; import {useState} from 'react'; import {useRouter} from 'next/navigation'; const money=(v:number)=>v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-export function MachineManager({machines}:{machines:any[]}){const r=useRouter();const blank={name:'',category:'Impressora FDM',power_kw:'0',purchase_value:'0',useful_hours:'0',purchase_date:'',notes:''};const [form,setForm]=useState(blank);const [editing,setEditing]=useState<any|null>(null);const [error,setError]=useState('');async function save(e:any){e.preventDefault();setError('');try{const res=await fetch('/api/machines',{method:editing?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(editing?{...form,id:editing.id}:form)});const j=await res.json();if(!res.ok)throw new Error(j.error||'Erro');setForm(blank);setEditing(null);r.refresh()}catch(e:any){setError(e.message)}}async function disable(id:string){if(!confirm('Desativar este equipamento? Ele continuará no histórico financeiro.'))return;const res=await fetch('/api/machines',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});const j=await res.json();if(!res.ok)setError(j.error||'Erro');else r.refresh()}function edit(m:any){setEditing(m);setForm({name:m.name,category:m.category,power_kw:String(m.power_kw||0),purchase_value:String(m.purchase_value||0),useful_hours:String(m.useful_hours||0),purchase_date:m.purchase_date||'',notes:m.notes||''})}return <div className="grid two-col">{error&&<div className="error" style={{gridColumn:'1/-1'}}>{error}</div>}<form className="card grid" onSubmit={save}><div className="section-title"><h2>{editing?'✏️ Editar equipamento':'＋ Novo equipamento'}</h2>{editing&&<button type="button" className="btn btn-secondary btn-sm" onClick={()=>{setEditing(null);setForm(blank)}}>Cancelar</button>}</div><div className="field"><label>Nome</label><input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} required/></div><div className="form-grid"><div className="field"><label>Tipo</label><select className="select" value={form.category} onChange={e=>setForm({...form,category:e.target.value})}><option>Impressora FDM</option><option>Impressora Resina</option><option>Maquinário</option></select></div><div className="field"><label>Potência (kW)</label><input className="input" type="number" step="0.001" min="0" value={form.power_kw} onChange={e=>setForm({...form,power_kw:e.target.value})}/></div><div className="field"><label>Valor de aquisição</label><input className="input" type="number" step="0.01" min="0" value={form.purchase_value} onChange={e=>setForm({...form,purchase_value:e.target.value})}/></div><div className="field"><label>Vida útil (horas)</label><input className="input" type="number" step="1" min="0" value={form.useful_hours} onChange={e=>setForm({...form,useful_hours:e.target.value})}/></div><div className="field"><label>Data da compra</label><input className="input" type="date" value={form.purchase_date} onChange={e=>setForm({...form,purchase_date:e.target.value})}/></div></div><p className="muted">Depreciação: <strong>{money(Number(form.useful_hours)>0?Number(form.purchase_value||0)/Number(form.useful_hours):0)}/h</strong>. A compra é lançada automaticamente em Gastos e Compras.</p><div className="field"><label>Observações</label><textarea className="input" value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})}/></div><button className="btn btn-primary">{editing?'Salvar alterações':'Cadastrar equipamento'}</button></form><div className="card table-wrap"><h2>Equipamentos cadastrados</h2><table><thead><tr><th>Equipamento</th><th>Tipo</th><th>Potência</th><th>Aquisição</th><th>Depreciação/h</th><th>Status</th><th>Ações</th></tr></thead><tbody>{machines.map(m=><tr key={m.id}><td><strong>{m.name}</strong></td><td>{m.category}</td><td>{Number(m.power_kw).toFixed(3)} kW</td><td>{money(Number(m.purchase_value||0))}</td><td>{money(Number(m.depreciation_per_hour||0))}</td><td><span className={`badge ${m.active?'green':'yellow'}`}>{m.active?'Ativo':'Inativo'}</span></td><td>{m.active&&<div className="actions"><button className="btn btn-secondary btn-sm" onClick={()=>edit(m)}>Editar</button><button className="btn btn-danger btn-sm" onClick={()=>disable(m.id)}>Desativar</button></div>}</td></tr>)}{!machines.length&&<tr><td colSpan={7} className="muted">Nenhum equipamento cadastrado.</td></tr>}</tbody></table></div></div>}
+"use client";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+export function MachineManager({ machines }: { machines: any[] }) {
+  const r = useRouter();
+  const blank = {
+    name: "",
+    category: "Impressora FDM",
+    power_kw: "0",
+    purchase_value: "0",
+    useful_hours: "0",
+    purchase_date: "",
+    notes: "",
+  };
+  const [form, setForm] = useState(blank);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [error, setError] = useState("");
+  async function save(e: any) {
+    e.preventDefault();
+    setError("");
+    try {
+      const res = await fetch("/api/machines", {
+        method: editing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editing ? { ...form, id: editing.id } : form),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Erro");
+      setForm(blank);
+      setEditing(null);
+      r.refresh();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }
+  async function disable(id: string) {
+    if (!confirm("Desativar este equipamento? Ele continuará no histórico financeiro.")) return;
+    const res = await fetch("/api/machines", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    const j = await res.json();
+    if (!res.ok) setError(j.error || "Erro");
+    else r.refresh();
+  }
+  function edit(m: any) {
+    setEditing(m);
+    setForm({
+      name: m.name,
+      category: m.category,
+      power_kw: String(m.power_kw || 0),
+      purchase_value: String(m.purchase_value || 0),
+      useful_hours: String(m.useful_hours || 0),
+      purchase_date: m.purchase_date || "",
+      notes: m.notes || "",
+    });
+  }
+  return (
+    <div className="grid two-col">
+      {error && (
+        <div className="error" style={{ gridColumn: "1/-1" }}>
+          {error}
+        </div>
+      )}
+      <form className="card grid" onSubmit={save}>
+        <div className="section-title">
+          <h2>{editing ? "✏️ Editar equipamento" : "＋ Novo equipamento"}</h2>
+          {editing && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                setEditing(null);
+                setForm(blank);
+              }}
+            >
+              Cancelar
+            </button>
+          )}
+        </div>
+        <div className="field">
+          <label>Nome</label>
+          <input
+            className="input"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            required
+          />
+        </div>
+        <div className="form-grid">
+          <div className="field">
+            <label>Tipo</label>
+            <select
+              className="select"
+              value={form.category}
+              onChange={(e) => setForm({ ...form, category: e.target.value })}
+            >
+              <option>Impressora FDM</option>
+              <option>Impressora Resina</option>
+              <option>Maquinário</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>Potência (kW)</label>
+            <input
+              className="input"
+              type="number"
+              step="0.001"
+              min="0"
+              value={form.power_kw}
+              onChange={(e) => setForm({ ...form, power_kw: e.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label>Valor de aquisição</label>
+            <input
+              className="input"
+              type="number"
+              step="0.01"
+              min="0"
+              value={form.purchase_value}
+              onChange={(e) => setForm({ ...form, purchase_value: e.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label>Vida útil (horas)</label>
+            <input
+              className="input"
+              type="number"
+              step="1"
+              min="0"
+              value={form.useful_hours}
+              onChange={(e) => setForm({ ...form, useful_hours: e.target.value })}
+            />
+          </div>
+          <div className="field">
+            <label>Data da compra</label>
+            <input
+              className="input"
+              type="date"
+              value={form.purchase_date}
+              onChange={(e) => setForm({ ...form, purchase_date: e.target.value })}
+            />
+          </div>
+        </div>
+        <p className="muted">
+          Depreciação:{" "}
+          <strong>
+            {money(
+              Number(form.useful_hours) > 0
+                ? Number(form.purchase_value || 0) / Number(form.useful_hours)
+                : 0
+            )}
+            /h
+          </strong>
+          . A compra é lançada automaticamente em Gastos e Compras.
+        </p>
+        <div className="field">
+          <label>Observações</label>
+          <textarea
+            className="input"
+            value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+          />
+        </div>
+        <button className="btn btn-primary">
+          {editing ? "Salvar alterações" : "Cadastrar equipamento"}
+        </button>
+      </form>
+      <div className="card table-wrap">
+        <h2>Equipamentos cadastrados</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Equipamento</th>
+              <th>Tipo</th>
+              <th>Potência</th>
+              <th>Aquisição</th>
+              <th>Depreciação/h</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {machines.map((m) => (
+              <tr key={m.id}>
+                <td>
+                  <strong>{m.name}</strong>
+                </td>
+                <td>{m.category}</td>
+                <td>{Number(m.power_kw).toFixed(3)} kW</td>
+                <td>{money(Number(m.purchase_value || 0))}</td>
+                <td>{money(Number(m.depreciation_per_hour || 0))}</td>
+                <td>
+                  <span className={`badge ${m.active ? "green" : "yellow"}`}>
+                    {m.active ? "Ativo" : "Inativo"}
+                  </span>
+                </td>
+                <td>
+                  {m.active && (
+                    <div className="actions">
+                      <button className="btn btn-secondary btn-sm" onClick={() => edit(m)}>
+                        Editar
+                      </button>
+                      <button className="btn btn-danger btn-sm" onClick={() => disable(m.id)}>
+                        Desativar
+                      </button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {!machines.length && (
+              <tr>
+                <td colSpan={7} className="muted">
+                  Nenhum equipamento cadastrado.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

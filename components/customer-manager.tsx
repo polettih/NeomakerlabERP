@@ -1,3 +1,125 @@
-"use client"; import {useRouter} from "next/navigation"; import {useState} from "react";
-type C={id:string,name:string,email:string|null,phone:string|null,behavior:string,notes:string|null}; const opts=["Excelente","Bom","Normal","Problemático","Péssimo","Bloqueado"];
-export function CustomerManager({customers}:{customers:C[]}){const r=useRouter(); const [edit,setEdit]=useState<C|null>(null); const [q,setQ]=useState(""); const list=customers.filter(c=>c.name.toLowerCase().includes(q.toLowerCase())); async function save(){if(!edit)return; await fetch('/api/customers',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(edit)}); setEdit(null); r.refresh()} async function del(id:string){if(!confirm('Excluir cliente?'))return; await fetch('/api/customers?id='+id,{method:'DELETE'}); r.refresh()} return <div className="table-wrap"><div className="section-title"><h2>Clientes cadastrados</h2><input className="input" placeholder="Buscar cliente" value={q} onChange={e=>setQ(e.target.value)}/></div><table><thead><tr><th>Cliente</th><th>Comportamento</th><th>Contato</th><th></th></tr></thead><tbody>{list.map(c=><tr key={c.id}><td><b>{c.name}</b>{c.notes&&<div className="muted">{c.notes}</div>}</td><td><span className="badge">{c.behavior}</span></td><td>{c.phone||c.email||'-'}</td><td><button className="btn btn-secondary btn-sm" onClick={()=>setEdit(c)}>Editar</button> <button className="btn btn-danger btn-sm" onClick={()=>del(c.id)}>Excluir</button></td></tr>)}</tbody></table>{edit&&<div className="modal-backdrop"><div className="modal card grid"><h2>Editar cliente</h2><input className="input" value={edit.name} onChange={e=>setEdit({...edit,name:e.target.value})}/><input className="input" value={edit.email||''} placeholder="E-mail" onChange={e=>setEdit({...edit,email:e.target.value})}/><input className="input" value={edit.phone||''} placeholder="Telefone" onChange={e=>setEdit({...edit,phone:e.target.value})}/><select className="select" value={edit.behavior} onChange={e=>setEdit({...edit,behavior:e.target.value})}>{opts.map(o=><option key={o}>{o}</option>)}</select><textarea className="input" placeholder="Observações" value={edit.notes||''} onChange={e=>setEdit({...edit,notes:e.target.value})}/><div className="actions"><button className="btn btn-secondary" onClick={()=>setEdit(null)}>Cancelar</button><button className="btn btn-primary" onClick={save}>Salvar</button></div></div></div>}</div>}
+"use client";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+type C = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  behavior: string;
+  notes: string | null;
+};
+const opts = ["Excelente", "Bom", "Normal", "Problemático", "Péssimo", "Bloqueado"];
+export function CustomerManager({ customers }: { customers: C[] }) {
+  const r = useRouter();
+  const [edit, setEdit] = useState<C | null>(null);
+  const [q, setQ] = useState("");
+  const list = customers.filter((c) => c.name.toLowerCase().includes(q.toLowerCase()));
+  async function save() {
+    if (!edit) return;
+    await fetch("/api/customers", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(edit),
+    });
+    setEdit(null);
+    r.refresh();
+  }
+  async function del(id: string) {
+    if (!confirm("Excluir cliente?")) return;
+    await fetch("/api/customers?id=" + id, { method: "DELETE" });
+    r.refresh();
+  }
+  return (
+    <div className="table-wrap">
+      <div className="section-title">
+        <h2>Clientes cadastrados</h2>
+        <input
+          className="input"
+          placeholder="Buscar cliente"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Comportamento</th>
+            <th>Contato</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map((c) => (
+            <tr key={c.id}>
+              <td>
+                <b>{c.name}</b>
+                {c.notes && <div className="muted">{c.notes}</div>}
+              </td>
+              <td>
+                <span className="badge">{c.behavior}</span>
+              </td>
+              <td>{c.phone || c.email || "-"}</td>
+              <td>
+                <button className="btn btn-secondary btn-sm" onClick={() => setEdit(c)}>
+                  Editar
+                </button>{" "}
+                <button className="btn btn-danger btn-sm" onClick={() => del(c.id)}>
+                  Excluir
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {edit && (
+        <div className="modal-backdrop">
+          <div className="modal card grid">
+            <h2>Editar cliente</h2>
+            <input
+              className="input"
+              value={edit.name}
+              onChange={(e) => setEdit({ ...edit, name: e.target.value })}
+            />
+            <input
+              className="input"
+              value={edit.email || ""}
+              placeholder="E-mail"
+              onChange={(e) => setEdit({ ...edit, email: e.target.value })}
+            />
+            <input
+              className="input"
+              value={edit.phone || ""}
+              placeholder="Telefone"
+              onChange={(e) => setEdit({ ...edit, phone: e.target.value })}
+            />
+            <select
+              className="select"
+              value={edit.behavior}
+              onChange={(e) => setEdit({ ...edit, behavior: e.target.value })}
+            >
+              {opts.map((o) => (
+                <option key={o}>{o}</option>
+              ))}
+            </select>
+            <textarea
+              className="input"
+              placeholder="Observações"
+              value={edit.notes || ""}
+              onChange={(e) => setEdit({ ...edit, notes: e.target.value })}
+            />
+            <div className="actions">
+              <button className="btn btn-secondary" onClick={() => setEdit(null)}>
+                Cancelar
+              </button>
+              <button className="btn btn-primary" onClick={save}>
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

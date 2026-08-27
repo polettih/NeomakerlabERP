@@ -10,15 +10,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const update: Record<string, unknown> = {};
     if (body.description !== undefined) {
-      if (!String(body.description).trim()) return NextResponse.json({ error: "Descrição é obrigatória." }, { status: 400 });
+      if (!String(body.description).trim())
+        return NextResponse.json({ error: "Descrição é obrigatória." }, { status: 400 });
       update.description = body.description;
     }
     if (body.category !== undefined) {
-      update.category = body.category && EXPENSE_CATEGORIES.includes(body.category) ? body.category : (body.category || null);
+      update.category =
+        body.category && EXPENSE_CATEGORIES.includes(body.category)
+          ? body.category
+          : body.category || null;
     }
     if (body.amount !== undefined) {
       const amount = Number(body.amount);
-      if (!Number.isFinite(amount) || amount <= 0) return NextResponse.json({ error: "Informe um valor válido." }, { status: 400 });
+      if (!Number.isFinite(amount) || amount <= 0)
+        return NextResponse.json({ error: "Informe um valor válido." }, { status: 400 });
       update.amount = amount;
     }
     if (body.due_date !== undefined) update.due_date = body.due_date || null;
@@ -28,7 +33,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         return NextResponse.json({ error: "Status inválido." }, { status: 400 });
       }
       update.status = body.status;
-      update.paid_at = body.status === "paid" ? (body.paid_at || new Date().toISOString()) : null;
+      update.paid_at = body.status === "paid" ? body.paid_at || new Date().toISOString() : null;
     }
 
     if (!Object.keys(update).length) {
@@ -53,7 +58,11 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   try {
     const { id } = await params;
     const { supabase, organizationId } = await requireUser();
-    const { error } = await supabase.from("expenses").delete().eq("id", id).eq("organization_id", organizationId);
+    const { error } = await supabase
+      .from("expenses")
+      .delete()
+      .eq("id", id)
+      .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (e: any) {

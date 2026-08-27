@@ -1,2 +1,20 @@
-import {requireUser} from "@/lib/auth"; import {ChannelManager} from "@/components/channel-manager";
-export default async function ConfiguracoesPage(){const {supabase}=await requireUser(); const {data}=await supabase.from("sales_channels").select("id,name,active,fee_percent,fixed_fee").order("name"); return <div className="content"><div className="section-title"><div><h1>Configurações</h1><p className="muted">Gerencie os canais usados para registrar pedidos.</p></div></div><ChannelManager channels={data??[]}/></div>}
+import { requireUser } from "@/lib/auth";
+import { ChannelManager } from "@/components/channel-manager";
+export default async function ConfiguracoesPage() {
+  const { supabase } = await requireUser();
+  const { data } = await supabase
+    .from("sales_channels")
+    .select("id,name,active,fee_percent,fixed_fee")
+    .order("name");
+  return (
+    <div className="content">
+      <div className="section-title">
+        <div>
+          <h1>Configurações</h1>
+          <p className="muted">Gerencie os canais usados para registrar pedidos.</p>
+        </div>
+      </div>
+      <ChannelManager channels={data ?? []} />
+    </div>
+  );
+}

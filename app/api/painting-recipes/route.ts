@@ -1,4 +1,47 @@
-import {NextResponse} from "next/server";
-import {requireUser} from "@/lib/auth";
-export async function POST(request: Request) { try { const {supabase}=await requireUser(); const body=await request.json(); if(!body.name?.trim()) return NextResponse.json({error:"Nome da receita é obrigatório."},{status:400}); const {data:member}=await supabase.from("organization_members").select("organization_id").limit(1).single(); if(!member) throw new Error("Organização não encontrada."); const {data,error}=await supabase.from("painting_recipes").insert({organization_id:member.organization_id,name:body.name.trim(),category:body.category||"Geral",description:body.description||null,colors:Array.isArray(body.colors)?body.colors:[],dilution:body.dilution||null,finish:body.finish||null,notes:body.notes||null,product_id:body.product_id||null}).select().single(); if(error) throw error; return NextResponse.json(data); } catch(e:any){return NextResponse.json({error:e.message||"Erro interno"},{status:500});} }
-export async function DELETE(request: Request) { try { const {supabase}=await requireUser(); const id=new URL(request.url).searchParams.get("id"); if(!id) return NextResponse.json({error:"ID obrigatório."},{status:400}); const {error}=await supabase.from("painting_recipes").delete().eq("id",id); if(error) throw error; return NextResponse.json({ok:true}); } catch(e:any){return NextResponse.json({error:e.message||"Erro interno"},{status:500});} }
+import { NextResponse } from "next/server";
+import { requireUser } from "@/lib/auth";
+export async function POST(request: Request) {
+  try {
+    const { supabase } = await requireUser();
+    const body = await request.json();
+    if (!body.name?.trim())
+      return NextResponse.json({ error: "Nome da receita é obrigatório." }, { status: 400 });
+    const { data: member } = await supabase
+      .from("organization_members")
+      .select("organization_id")
+      .limit(1)
+      .single();
+    if (!member) throw new Error("Organização não encontrada.");
+    const { data, error } = await supabase
+      .from("painting_recipes")
+      .insert({
+        organization_id: member.organization_id,
+        name: body.name.trim(),
+        category: body.category || "Geral",
+        description: body.description || null,
+        colors: Array.isArray(body.colors) ? body.colors : [],
+        dilution: body.dilution || null,
+        finish: body.finish || null,
+        notes: body.notes || null,
+        product_id: body.product_id || null,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return NextResponse.json(data);
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message || "Erro interno" }, { status: 500 });
+  }
+}
+export async function DELETE(request: Request) {
+  try {
+    const { supabase } = await requireUser();
+    const id = new URL(request.url).searchParams.get("id");
+    if (!id) return NextResponse.json({ error: "ID obrigatório." }, { status: 400 });
+    const { error } = await supabase.from("painting_recipes").delete().eq("id", id);
+    if (error) throw error;
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message || "Erro interno" }, { status: 500 });
+  }
+}

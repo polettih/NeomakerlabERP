@@ -1,2 +1,25 @@
-import {requireUser} from '@/lib/auth'; import {MachineManager} from '@/components/machine-manager';
-export default async function ImpressorasPage(){const {supabase,organizationId}=await requireUser();const {data}=await supabase.from('machines').select('*').eq('organization_id',organizationId).order('category').order('name');return <div className="content"><div className="section-title"><div><h1>🖨️ Impressoras e Maquinários</h1><p className="muted">Cadastre aqui impressoras e equipamentos. O valor de aquisição é contabilizado automaticamente em Gastos e Compras.</p></div></div><MachineManager machines={data??[]}/></div>}
+import { requireUser } from "@/lib/auth";
+import { MachineManager } from "@/components/machine-manager";
+export default async function ImpressorasPage() {
+  const { supabase, organizationId } = await requireUser();
+  const { data } = await supabase
+    .from("machines")
+    .select("*")
+    .eq("organization_id", organizationId)
+    .order("category")
+    .order("name");
+  return (
+    <div className="content">
+      <div className="section-title">
+        <div>
+          <h1>🖨️ Impressoras e Maquinários</h1>
+          <p className="muted">
+            Cadastre aqui impressoras e equipamentos. O valor de aquisição é contabilizado
+            automaticamente em Gastos e Compras.
+          </p>
+        </div>
+      </div>
+      <MachineManager machines={data ?? []} />
+    </div>
+  );
+}
