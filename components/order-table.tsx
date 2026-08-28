@@ -117,7 +117,7 @@ export function OrderTable({ orders }: { orders: Order[] }) {
               <th>Conclusão</th>
               <th>Status</th>
               <th>Pagamento</th>
-              <th>Venda bruta</th>
+              <th>Total do pedido</th>
               <th>Ações</th>
             </tr>
           </thead>
