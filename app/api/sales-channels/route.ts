@@ -3,25 +3,25 @@ import { requireUser } from "@/lib/auth";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { supabase } = await requireUser();
-    const { data: m } = await supabase
-      .from("organization_members")
-      .select("organization_id")
-      .limit(1)
-      .single();
-    if (!m) throw new Error("Organização não encontrada.");
+    const { supabase, organizationId } = await requireUser();
+    if (!String(body.name || "").trim())
+      return NextResponse.json({ error: "Nome do canal é obrigatório." }, { status: 400 });
     const { data, error } = await supabase
       .from("sales_channels")
       .insert({
-        organization_id: m.organization_id,
-        name: String(body.name || "").trim(),
+        organization_id: organizationId,
+        name: String(body.name).trim(),
         active: body.active !== false,
         fee_percent: Math.max(0, Math.min(1, Number(body.fee_percent || 0))),
         fixed_fee: Math.max(0, Number(body.fixed_fee || 0)),
       })
       .select()
       .single();
-    if (error) throw error;
+    if (error) {
+      if (error.code === "23505")
+        throw new Error("Já existe um canal com esse nome nesta organização.");
+      throw error;
+    }
     return NextResponse.json(data);
   } catch (e: any) {
     return NextResponse.json({ error: e.message || "Erro ao criar canal." }, { status: 500 });

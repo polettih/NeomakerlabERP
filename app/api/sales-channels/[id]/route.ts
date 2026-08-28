@@ -4,7 +4,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const body = await request.json();
-    const { supabase } = await requireUser();
+    const { supabase, organizationId } = await requireUser();
     const update: any = {};
     if (body.name !== undefined) update.name = String(body.name).trim();
     if (typeof body.active === "boolean") update.active = body.active;
@@ -15,9 +15,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .from("sales_channels")
       .update(update)
       .eq("id", id)
+      .eq("organization_id", organizationId)
       .select()
       .single();
-    if (error) throw error;
+    if (error) {
+      if (error.code === "23505")
+        throw new Error("Já existe um canal com esse nome nesta organização.");
+      if (error.code === "PGRST116") throw new Error("Canal não encontrado.");
+      throw error;
+    }
     return NextResponse.json(data);
   } catch (e: any) {
     return NextResponse.json({ error: e.message || "Erro ao atualizar canal." }, { status: 500 });
@@ -26,8 +32,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(_r: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { supabase } = await requireUser();
-    const { error } = await supabase.from("sales_channels").delete().eq("id", id);
+    const { supabase, organizationId } = await requireUser();
+    const { error } = await supabase
+      .from("sales_channels")
+      .delete()
+      .eq("id", id)
+      .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (e: any) {
