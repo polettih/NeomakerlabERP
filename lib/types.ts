@@ -30,11 +30,15 @@ export type RecurringExpense = {
 export type FinanceCategoryRow = {
   category: string;
   qty: number;
-  gross: number;
+  /** Receita real de mercadoria (preço × quantidade). Base do lucro. */
+  merchandise: number;
+  /** Valor total faturado ao cliente (mercadoria + taxa de marketplace + frete). Base do caixa/recebível. */
+  billed: number;
   received: number;
   receivable: number;
   cost: number;
   fees: number;
+  shipping: number;
   labor: number;
 };
 

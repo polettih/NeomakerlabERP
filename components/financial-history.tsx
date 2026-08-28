@@ -43,8 +43,9 @@ export function FinancialHistory({
       </div>
       <div className="grid four-col">
         <div className="card">
-          <span className="muted">Faturamento acumulado</span>
+          <span className="muted">Total faturado aos clientes</span>
           <h2>{money(totalGross)}</h2>
+          <small className="muted">Mercadoria + taxas + frete cobrados</small>
         </div>
         <div className="card">
           <span className="muted">Recebido acumulado</span>

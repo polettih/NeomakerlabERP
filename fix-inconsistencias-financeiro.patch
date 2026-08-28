@@ -1,0 +1,1004 @@
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..536529f
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,17 @@
++/node_modules
++/.pnp
++.pnp.js
++/coverage
++/.next/
++/out/
++/build
++.DS_Store
++*.pem
++npm-debug.log*
++yarn-debug.log*
++yarn-error.log*
++.env
++.env*.local
++.vercel
++*.tsbuildinfo
++next-env.d.ts
+diff --git a/app/(app)/dashboard/page.tsx b/app/(app)/dashboard/page.tsx
+index 42e9a78..6d9a4a9 100644
+--- a/app/(app)/dashboard/page.tsx
++++ b/app/(app)/dashboard/page.tsx
+@@ -55,8 +55,9 @@ export default async function DashboardPage() {
+           <div className="value">{d.itemsSold}</div>
+         </div>
+         <Link className="card" href="/gastos-e-compras">
+-          <div className="label">Despesas</div>
++          <div className="label">Despesas pagas</div>
+           <div className="value">{money(d.costs)}</div>
++          <small className="muted">Não inclui material nem equipamentos</small>
+         </Link>
+       </div>
+ 
+diff --git a/app/(app)/financeiro/page.tsx b/app/(app)/financeiro/page.tsx
+index c762b3c..89f0bfa 100644
+--- a/app/(app)/financeiro/page.tsx
++++ b/app/(app)/financeiro/page.tsx
+@@ -6,30 +6,18 @@ import { RecurringExpensesManager } from "@/components/recurring-expenses-manage
+ import { MonthlySummary } from "@/components/monthly-summary";
+ import { PageTabs } from "@/components/page-tabs";
+ import { ensureRecurringExpensesForCurrentMonth } from "@/lib/services/recurring-expenses";
+-import {
+-  n,
+-  validDate,
+-  monthKey,
+-  monthLabel,
+-  isPaidStatus as paidStatus,
+-  isCancelledStatus as cancelledStatus,
+-  signedMoney as money,
+-} from "@/lib/format";
+-import type { Expense, FinanceCategoryRow, FinanceHistoryRow } from "@/lib/types";
++import { getFinanceSummary } from "@/lib/services/finance-summary";
++import { signedMoney as money } from "@/lib/format";
++import type { FinanceHistoryRow } from "@/lib/types";
+ 
+-function monthRange(start: string, end: string) {
+-  const result: string[] = [];
+-  let [y, m] = start.split("-").map(Number);
+-  const [ey, em] = end.split("-").map(Number);
+-  while (y < ey || (y === ey && m <= em)) {
+-    result.push(`${y}-${String(m).padStart(2, "0")}`);
+-    m++;
+-    if (m === 13) {
+-      m = 1;
+-      y++;
+-    }
+-  }
+-  return result;
++function toMonth(row: FinanceHistoryRow) {
++  return {
++    label: row.label,
++    gross: row.gross,
++    received: row.received,
++    expensesPaid: row.outflow,
++    result: row.cashResult,
++  };
+ }
+ 
+ export default async function FinanceiroPage() {
+@@ -39,243 +27,13 @@ export default async function FinanceiroPage() {
+   // carregar os dados, para que já apareçam nesta mesma visita.
+   await ensureRecurringExpensesForCurrentMonth(supabase, organizationId);
+ 
+-  const [
+-    { data: orders },
+-    { data: items },
+-    { data: payments },
+-    { data: expenses },
+-    { data: materialPurchases },
+-    { data: settings },
+-    { data: recurringExpenses },
+-  ] = await Promise.all([
+-    supabase
+-      .from("orders")
+-      .select("id,status,total,gross_total,shipping_cost,marketplace_fee,order_date"),
+-    supabase
+-      .from("order_items")
+-      .select(
+-        "order_id,product_name,quantity,unit_price,unit_cost,total,products(category),product_id"
+-      ),
+-    supabase.from("payments").select("order_id,amount,payment_date"),
+-    supabase
+-      .from("expenses")
+-      .select(
+-        "id,description,category,amount,status,due_date,paid_at,created_at,source_type,source_id"
+-      )
+-      .order("due_date", { ascending: false, nullsFirst: false }),
+-    supabase.from("material_purchases").select("id,total_cost,created_at"),
+-    supabase
+-      .from("organization_settings")
+-      .select("labor_hour_rate")
+-      .eq("organization_id", organizationId)
+-      .maybeSingle(),
+-    supabase
+-      .from("recurring_expenses")
+-      .select("id,description,category,amount,day_of_month,active")
+-      .order("created_at", { ascending: true }),
+-  ]);
+-
+-  const validOrders = (orders ?? []).filter((o) => !cancelledStatus(o.status));
+-  const validIds = new Set(validOrders.map((o) => o.id));
+-  const validExpenses = ((expenses ?? []) as Expense[]).filter((e) => !cancelledStatus(e.status));
+-
+-  const paymentsByOrder = new Map<string, number>();
+-  for (const p of payments ?? [])
+-    if (p.order_id && validIds.has(p.order_id))
+-      paymentsByOrder.set(p.order_id, (paymentsByOrder.get(p.order_id) ?? 0) + n(p.amount));
+-
+-  const productIds = [
+-    ...new Set((items ?? []).map((i) => i.product_id).filter((id): id is string => Boolean(id))),
+-  ];
+-  const pricing = new Map<string, number>();
+-  if (productIds.length) {
+-    const { data } = await supabase
+-      .from("product_pricing")
+-      .select("product_id,labor_cost")
+-      .in("product_id", productIds);
+-    for (const p of data ?? []) pricing.set(p.product_id, n(p.labor_cost));
+-  }
+-
+-  const rowsMap: Record<string, FinanceCategoryRow> = {};
+-  let totalGross = 0,
+-    totalReceived = 0,
+-    totalCost = 0,
+-    totalFees = 0,
+-    totalLabor = 0,
+-    totalQty = 0,
+-    totalLaborItems = 0;
+-  for (const order of validOrders) {
+-    const orderItems = (items ?? []).filter((i) => i.order_id === order.id);
+-    const merchandise = orderItems.reduce(
+-      (s, i) => s + (n(i.total) || n(i.unit_price) * n(i.quantity)),
+-      0
+-    );
+-    const gross = n(order.gross_total ?? order.total);
+-    const fee = n(order.marketplace_fee);
+-    const received = paymentsByOrder.get(order.id) ?? 0;
+-    totalGross += gross;
+-    totalFees += fee;
+-    totalReceived += received;
+-    for (const item of orderItems) {
+-      const product = Array.isArray(item.products) ? item.products[0] : item.products;
+-      const category = product?.category || "Outros";
+-      const qty = n(item.quantity);
+-      const base = n(item.total) || n(item.unit_price) * qty;
+-      const share = merchandise > 0 ? base / merchandise : 0;
+-      const row =
+-        rowsMap[category] ??
+-        (rowsMap[category] = {
+-          category,
+-          qty: 0,
+-          gross: 0,
+-          received: 0,
+-          receivable: 0,
+-          cost: 0,
+-          fees: 0,
+-          labor: 0,
+-        });
+-      const laborPerUnit = item.product_id ? (pricing.get(item.product_id) ?? 0) : 0;
+-      row.qty += qty;
+-      row.gross += gross * share;
+-      row.received += received * share;
+-      row.cost += n(item.unit_cost) * qty;
+-      row.fees += fee * share;
+-      row.labor += laborPerUnit * qty;
+-      totalCost += n(item.unit_cost) * qty;
+-      totalLabor += laborPerUnit * qty;
+-      totalQty += qty;
+-      if (laborPerUnit > 0) totalLaborItems += qty;
+-    }
+-  }
+-  const rows = Object.values(rowsMap).sort((a, b) => b.gross - a.gross);
+-  for (const row of rows) row.receivable = Math.max(row.gross - row.received, 0);
+-
+-  const materialPurchasesTotal = (materialPurchases ?? []).reduce((s, p) => s + n(p.total_cost), 0);
+-  const paidExpenses = validExpenses
+-    .filter((e) => paidStatus(e.status))
+-    .reduce((s, e) => s + n(e.amount), 0);
+-  const unpaidExpenses = validExpenses.filter((e) => !paidStatus(e.status));
+-  const payableTotal = unpaidExpenses.reduce((s, e) => s + n(e.amount), 0);
+-  const today = new Date();
+-  const overduePayableTotal = unpaidExpenses
+-    .filter((e) => {
+-      const due = validDate(e.due_date);
+-      return due !== null && due < today;
+-    })
+-    .reduce((s, e) => s + n(e.amount), 0);
+-  const totalCashOut = materialPurchasesTotal + paidExpenses;
+-  const cashBalance = totalReceived - totalCashOut;
+-  const operatingResult = totalGross - totalCost - totalFees - totalLabor;
+-  const recovery =
+-    totalCashOut > 0 ? Math.max(0, Math.min(100, (totalReceived / totalCashOut) * 100)) : 100;
+-  // Despesas administrativas pagas (aluguel, marketing, assinaturas etc.), excluindo
+-  // compras de material (já embutidas no custo do produto vendido, via unit_cost) e
+-  // compras de equipamento (investimento/capex, não uma despesa operacional recorrente).
+-  // Usar totalCashOut aqui contaria o custo do material duas vezes no resultado.
+-  const operatingExpensesPaid = validExpenses
+-    .filter((e) => paidStatus(e.status) && e.source_type !== "machine_purchase")
+-    .reduce((s, e) => s + n(e.amount), 0);
+-
+-  const historyMap = new Map<string, FinanceHistoryRow>();
+-  const ensure = (key: string) => {
+-    let row = historyMap.get(key);
+-    if (!row) {
+-      row = {
+-        key,
+-        label: monthLabel(key),
+-        gross: 0,
+-        received: 0,
+-        receivable: 0,
+-        purchases: 0,
+-        expenses: 0,
+-        equipment: 0,
+-        outflow: 0,
+-        cashResult: 0,
+-        cumulative: 0,
+-        payable: 0,
+-      };
+-      historyMap.set(key, row);
+-    }
+-    return row;
+-  };
+-  for (const o of validOrders) {
+-    const k = monthKey(o.order_date);
+-    if (k) ensure(k).gross += n(o.gross_total ?? o.total);
+-  }
+-  for (const p of payments ?? []) {
+-    if (p.order_id && validIds.has(p.order_id)) {
+-      const k = monthKey(p.payment_date);
+-      if (k) ensure(k).received += n(p.amount);
+-    }
+-  }
+-  for (const p of materialPurchases ?? []) {
+-    const k = monthKey(p.created_at);
+-    if (k) ensure(k).purchases += n(p.total_cost);
+-  }
+-  for (const e of validExpenses) {
+-    const paid = paidStatus(e.status);
+-    const paymentKey = monthKey(e.paid_at);
+-    if (paid && paymentKey) {
+-      const row = ensure(paymentKey);
+-      if (e.source_type === "machine_purchase") row.equipment += n(e.amount);
+-      else row.expenses += n(e.amount);
+-    }
+-  }
+-
+-  // Inclui todos os meses entre a primeira movimentação e o mês atual, mesmo que algum mês não tenha movimento.
+-  const keys = [...historyMap.keys()].sort();
+-  const now = new Date();
+-  const currentKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+-  const startKey = keys[0] ?? currentKey;
+-  const allKeys = monthRange(startKey, currentKey);
+-  const historyRows = allKeys.map(ensure);
+-
+-  // Snapshot mensal: a receber e a pagar são saldos em aberto no fechamento daquele mês.
+-  let cumulative = 0;
+-  for (const row of historyRows) {
+-    row.outflow = row.purchases + row.expenses + row.equipment;
+-    row.cashResult = row.received - row.outflow;
+-    cumulative += row.cashResult;
+-    row.cumulative = cumulative;
+-    const [y, m] = row.key.split("-").map(Number);
+-    const end = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
+-    row.receivable = validOrders.reduce((s, o) => {
+-      const od = validDate(o.order_date);
+-      if (!od || od > end) return s;
+-      const receivedByEnd = (payments ?? [])
+-        .filter(
+-          (p) =>
+-            p.order_id === o.id &&
+-            validIds.has(o.id) &&
+-            validDate(p.payment_date) &&
+-            validDate(p.payment_date)! <= end
+-        )
+-        .reduce((a, p) => a + n(p.amount), 0);
+-      return s + Math.max(n(o.gross_total ?? o.total) - receivedByEnd, 0);
+-    }, 0);
+-    row.payable = validExpenses.reduce((s, e) => {
+-      // O saldo a pagar no fechamento do mês considera obrigações que já existiam
+-      // naquele momento, independentemente de o vencimento ser futuro.
+-      const created = validDate(e.created_at);
+-      if (!created || created > end) return s;
+-      const paid = paidStatus(e.status);
+-      const paidAt = validDate(e.paid_at);
+-      if (paid && paidAt && paidAt <= end) return s;
+-      return s + n(e.amount);
+-    }, 0);
+-  }
+-
+-  const initialOutflow = totalCashOut;
++  // Mesma fonte de dados usada pelo Início — "Vendas", "Lucro" e "Despesas" aqui são,
++  // por construção, idênticos aos números mostrados lá. Ver lib/services/finance-summary.ts.
++  const { totals, categories, historyRows, laborHourRate, recurringExpenses } =
++    await getFinanceSummary(supabase, organizationId);
+ 
+   const currentRow = historyRows[historyRows.length - 1];
+   const previousRow = historyRows.length > 1 ? historyRows[historyRows.length - 2] : null;
+-  const toMonth = (row: FinanceHistoryRow) => ({
+-    label: row.label,
+-    gross: row.gross,
+-    received: row.received,
+-    expensesPaid: row.outflow,
+-    result: row.cashResult,
+-  });
+   const currentMonth = toMonth(currentRow);
+   const previousMonth = previousRow ? toMonth(previousRow) : null;
+ 
+@@ -298,27 +56,27 @@ export default async function FinanceiroPage() {
+ 
+       <div className="grid four-col" style={{ marginTop: 18 }}>
+         <div className="card">
+-          <span className="muted">Faturamento acumulado</span>
+-          <h2>{money(totalGross)}</h2>
+-          <small className="muted">Vendas válidas</small>
++          <span className="muted">Vendas</span>
++          <h2>{money(totals.merchandise)}</h2>
++          <small className="muted">Receita de mercadoria, mesmo número do Início</small>
+         </div>
+         <div className="card">
+           <span className="muted">Caixa disponível acumulado</span>
+-          <h2 className={cashBalance < 0 ? "error" : ""}>{money(cashBalance)}</h2>
++          <h2 className={totals.cashBalance < 0 ? "error" : ""}>{money(totals.cashBalance)}</h2>
+           <small className="muted">Recebido − saídas pagas</small>
+         </div>
+         <div className="card">
+           <span className="muted">A receber</span>
+-          <h2>{money(Math.max(totalGross - totalReceived, 0))}</h2>
+-          <small className="muted">Vendas ainda não recebidas</small>
++          <h2>{money(totals.receivable)}</h2>
++          <small className="muted">Inclui taxas e frete já cobrados do cliente</small>
+         </div>
+         <div className="card">
+           <span className="muted">Contas a pagar</span>
+-          <h2 className={payableTotal > 0 ? "error" : ""}>
+-            {payableTotal > 0 ? money(-payableTotal) : money(0)}
++          <h2 className={totals.payable > 0 ? "error" : ""}>
++            {totals.payable > 0 ? money(-totals.payable) : money(0)}
+           </h2>
+-          {overduePayableTotal > 0 ? (
+-            <small className="error">⚠ {money(-overduePayableTotal)} vencidas</small>
++          {totals.overduePayable > 0 ? (
++            <small className="error">⚠ {money(-totals.overduePayable)} vencidas</small>
+           ) : (
+             <small className="muted">Obrigações em aberto</small>
+           )}
+@@ -328,25 +86,23 @@ export default async function FinanceiroPage() {
+       <div className="grid four-col" style={{ marginTop: 12 }}>
+         <div className="card">
+           <span className="muted">Saídas acumuladas</span>
+-          <h2>{money(totalCashOut)}</h2>
++          <h2>{money(totals.totalCashOut)}</h2>
+           <small className="muted">Compras + despesas pagas + equipamentos</small>
+         </div>
+         <div className="card">
+-          <span className="muted">Resultado operacional</span>
+-          <h2 className={operatingResult < 0 ? "error" : ""}>{money(operatingResult)}</h2>
+-          <small className="muted">Antes de considerar o caixa</small>
++          <span className="muted">Lucro líquido</span>
++          <h2 className={totals.profit < 0 ? "error" : ""}>{money(totals.profit)}</h2>
++          <small className="muted">Vendas − custo − taxas − frete − mão de obra</small>
+         </div>
+         <div className="card">
+           <span className="muted">Recuperação do caixa</span>
+-          <h2>{recovery.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</h2>
++          <h2>{totals.recovery.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</h2>
+           <small className="muted">Recebimentos ÷ saídas acumuladas</small>
+         </div>
+         <div className="card">
+           <span className="muted">Taxas de marketplace</span>
+-          <h2>{money(totalFees)}</h2>
+-          <small className="muted">
+-            {validOrders.filter((o) => n(o.marketplace_fee) > 0).length} pedidos com taxa
+-          </small>
++          <h2>{money(totals.fees)}</h2>
++          <small className="muted">{totals.feeOrderCount} pedidos com taxa</small>
+         </div>
+       </div>
+ 
+@@ -359,20 +115,17 @@ export default async function FinanceiroPage() {
+             content: (
+               <FinanceTabs
+                 summary={{
+-                  qty: totalQty,
+-                  gross: totalGross,
+-                  received: totalReceived,
+-                  receivable: Math.max(totalGross - totalReceived, 0),
+-                  profit: operatingResult,
+-                }}
+-                rows={rows}
+-                fees={{
+-                  total: totalFees,
+-                  count: validOrders.filter((o) => n(o.marketplace_fee) > 0).length,
++                  qty: totals.qty,
++                  gross: totals.merchandise,
++                  received: totals.received,
++                  receivable: totals.receivable,
++                  profit: totals.profit,
+                 }}
+-                labor={{ total: totalLabor, items: totalLaborItems }}
+-                spent={operatingExpensesPaid}
+-                initialLaborHourRate={n(settings?.labor_hour_rate ?? 30)}
++                rows={categories}
++                fees={{ total: totals.fees, count: totals.feeOrderCount }}
++                labor={{ total: totals.labor, items: totals.laborItemCount }}
++                spent={totals.paidExpenses}
++                initialLaborHourRate={laborHourRate}
+               />
+             ),
+           },
+@@ -382,18 +135,18 @@ export default async function FinanceiroPage() {
+             content: (
+               <FinancialHistory
+                 rows={historyRows}
+-                totalPayable={payableTotal}
+-                totalReceivable={Math.max(totalGross - totalReceived, 0)}
+-                totalOutflow={initialOutflow}
+-                totalGross={totalGross}
+-                totalReceived={totalReceived}
++                totalPayable={totals.payable}
++                totalReceivable={totals.receivable}
++                totalOutflow={totals.totalCashOut}
++                totalGross={totals.billed}
++                totalReceived={totals.received}
+               />
+             ),
+           },
+           {
+             id: "recorrentes",
+             label: "Despesas recorrentes",
+-            content: <RecurringExpensesManager items={recurringExpenses ?? []} />,
++            content: <RecurringExpensesManager items={recurringExpenses} />,
+           },
+         ]}
+       />
+diff --git a/components/finance-tabs.tsx b/components/finance-tabs.tsx
+index 50cb970..927d8fc 100644
+--- a/components/finance-tabs.tsx
++++ b/components/finance-tabs.tsx
+@@ -78,7 +78,7 @@ export function FinanceTabs({
+               <div className="value">{summary.qty}</div>
+             </div>
+             <div className="card">
+-              <div className="label">Venda bruta</div>
++              <div className="label">Vendas</div>
+               <div className="value">{money(summary.gross)}</div>
+             </div>
+             <div className="card">
+@@ -93,7 +93,7 @@ export function FinanceTabs({
+               <div className="label">Lucro líquido das vendas</div>
+               <div className="value">{money(summary.profit)}</div>
+               <p className="muted" style={{ marginTop: 4 }}>
+-                Venda bruta − custo do produto − taxas − mão de obra.
++                Vendas − custo do produto − taxas − frete − mão de obra.
+               </p>
+             </div>
+             <div className="card">
+@@ -119,9 +119,10 @@ export function FinanceTabs({
+                   <tr>
+                     <th>Categoria</th>
+                     <th>Itens</th>
+-                    <th>Venda bruta</th>
++                    <th>Vendas</th>
+                     <th>Recebido</th>
+                     <th>Taxas</th>
++                    <th>Frete</th>
+                     <th>Mão de obra</th>
+                     <th>Lucro líquido</th>
+                     <th>A receber</th>
+@@ -134,17 +135,18 @@ export function FinanceTabs({
+                         <strong>{r.category}</strong>
+                       </td>
+                       <td>{r.qty}</td>
+-                      <td>{money(r.gross)}</td>
++                      <td>{money(r.merchandise)}</td>
+                       <td>{money(r.received)}</td>
+                       <td>{money(r.fees)}</td>
++                      <td>{money(r.shipping)}</td>
+                       <td>{money(r.labor)}</td>
+-                      <td>{money(r.gross - r.cost - r.fees - r.labor)}</td>
++                      <td>{money(r.merchandise - r.cost - r.fees - r.shipping - r.labor)}</td>
+                       <td>{money(r.receivable)}</td>
+                     </tr>
+                   ))}
+                   {!rows.length && (
+                     <tr>
+-                      <td colSpan={8} className="muted">
++                      <td colSpan={9} className="muted">
+                         Ainda não existem vendas para consolidar.
+                       </td>
+                     </tr>
+@@ -170,7 +172,7 @@ export function FinanceTabs({
+             <div className="value">{money(fees.count ? fees.total / fees.count : 0)}</div>
+           </div>
+           <div className="card">
+-            <div className="label">Participação na venda bruta</div>
++            <div className="label">Participação nas vendas</div>
+             <div className="value">
+               {summary.gross ? ((fees.total / summary.gross) * 100).toFixed(2) + "%" : "0,00%"}
+             </div>
+diff --git a/components/financial-history.tsx b/components/financial-history.tsx
+index 03f5ec4..988c015 100644
+--- a/components/financial-history.tsx
++++ b/components/financial-history.tsx
+@@ -43,8 +43,9 @@ export function FinancialHistory({
+       </div>
+       <div className="grid four-col">
+         <div className="card">
+-          <span className="muted">Faturamento acumulado</span>
++          <span className="muted">Total faturado aos clientes</span>
+           <h2>{money(totalGross)}</h2>
++          <small className="muted">Mercadoria + taxas + frete cobrados</small>
+         </div>
+         <div className="card">
+           <span className="muted">Recebido acumulado</span>
+diff --git a/lib/services/dashboard.ts b/lib/services/dashboard.ts
+index 1a36926..8547165 100644
+--- a/lib/services/dashboard.ts
++++ b/lib/services/dashboard.ts
+@@ -1,76 +1,36 @@
+-import { createClient } from "@/lib/supabase/server";
++import { requireUser } from "@/lib/auth";
++import { getFinanceSummary } from "@/lib/services/finance-summary";
++
++/**
++ * Início consome a mesma função que o Financeiro (getFinanceSummary), garantindo
++ * que "Vendas", "Lucro" e "Despesas" nunca mais divirjam entre as duas telas.
++ * Antes, este arquivo recalculava tudo com fórmulas próprias — ver histórico do
++ * projeto para a análise completa das 3 inconsistências que isso causava.
++ */
+ export async function getDashboard() {
+-  const supabase = await createClient();
+-  const [
+-    { data: orders },
+-    { data: payments },
+-    { data: expenses },
+-    { data: production },
+-    { data: items },
+-  ] = await Promise.all([
+-    supabase.from("orders").select("id,status,total,shipping_cost,marketplace_fee,order_date"),
+-    supabase.from("payments").select("order_id,amount,payment_date"),
+-    supabase.from("expenses").select("amount,status"),
+-    supabase.from("production_orders").select("id,status"),
+-    supabase
+-      .from("order_items")
+-      .select("order_id,quantity,unit_price,unit_cost,total,products(category)"),
+-  ]);
+-  const valid = (orders ?? []).filter((o) => o.status !== "cancelled");
+-  const ids = new Set(valid.map((o) => o.id));
+-  const paid = new Map<string, number>();
+-  (payments ?? []).forEach((p) => {
+-    if (p.order_id && ids.has(p.order_id))
+-      paid.set(p.order_id, (paid.get(p.order_id) || 0) + Number(p.amount || 0));
+-  });
+-  const cats: any = {};
+-  (items ?? [])
+-    .filter((i: any) => ids.has(i.order_id))
+-    .forEach((i: any) => {
+-      const c = i.products?.category || "Outros";
+-      cats[c] ??= { category: c, qty: 0, sales: 0, cost: 0, received: 0, fees: 0, shipping: 0 };
+-      cats[c].qty += Number(i.quantity || 0);
+-      cats[c].sales += Number(i.total || Number(i.unit_price || 0) * Number(i.quantity || 0));
+-      cats[c].cost += Number(i.unit_cost || 0) * Number(i.quantity || 0);
+-    });
+-  valid.forEach((o) => {
+-    const orderItems = (items ?? []).filter((i: any) => i.order_id === o.id);
+-    const base =
+-      orderItems.reduce(
+-        (s: number, i: any) =>
+-          s + Number(i.total || Number(i.unit_price || 0) * Number(i.quantity || 0)),
+-        0
+-      ) || Number(o.total || 0);
+-    orderItems.forEach((i: any) => {
+-      const c = i.products?.category || "Outros";
+-      const part = Number(i.total || Number(i.unit_price || 0) * Number(i.quantity || 0)) / base;
+-      cats[c].fees += Number(o.marketplace_fee || 0) * part;
+-      cats[c].shipping += Number(o.shipping_cost || 0) * part;
+-      cats[c].received += (paid.get(o.id) || 0) * part;
+-    });
+-  });
+-  const categories = Object.values(cats)
+-    .map((r: any) => ({
+-      ...r,
+-      profit: r.sales - r.cost - r.fees - r.shipping,
+-      receivable: Math.max(r.sales - r.received, 0),
+-    }))
+-    .sort((a: any, b: any) => b.sales - a.sales);
+-  const sales = categories.reduce((s: any, r: any) => s + r.sales, 0);
+-  const received = categories.reduce((s: any, r: any) => s + r.received, 0);
+-  const costs = (expenses ?? [])
+-    .filter((e) => e.status !== "cancelled")
+-    .reduce((s, e) => s + Number(e.amount || 0), 0);
+-  const profit = categories.reduce((s: any, r: any) => s + r.profit, 0);
++  const { supabase, organizationId } = await requireUser();
++  const summary = await getFinanceSummary(supabase, organizationId);
++
+   return {
+-    sales,
+-    received,
+-    receivable: Math.max(sales - received, 0),
+-    costs,
+-    profit,
+-    itemsSold: categories.reduce((s: any, r: any) => s + r.qty, 0),
+-    orders: orders ?? [],
+-    production: production ?? [],
+-    categories,
++    // "Vendas" = receita real de mercadoria (mesma definição usada em Financeiro).
++    sales: summary.totals.merchandise,
++    received: summary.totals.received,
++    receivable: summary.totals.receivable,
++    // "Despesas" = despesas administrativas pagas (mesma definição de Financeiro):
++    // exclui compra de material (já embutida no custo do produto) e compra de
++    // equipamento (investimento, não despesa operacional recorrente).
++    costs: summary.totals.paidExpenses,
++    profit: summary.totals.profit,
++    itemsSold: summary.totals.qty,
++    orders: summary.orders,
++    production: summary.production,
++    categories: summary.categories.map((r) => ({
++      category: r.category,
++      qty: r.qty,
++      sales: r.merchandise,
++      received: r.received,
++      profit: r.merchandise - r.cost - r.fees - r.shipping - r.labor,
++      receivable: r.receivable,
++    })),
+   };
+ }
+diff --git a/lib/services/finance-summary.ts b/lib/services/finance-summary.ts
+new file mode 100644
+index 0000000..decc926
+--- /dev/null
++++ b/lib/services/finance-summary.ts
+@@ -0,0 +1,325 @@
++import type { SupabaseClient } from "@supabase/supabase-js";
++import { n, validDate, monthKey, monthLabel, isPaidStatus, isCancelledStatus } from "@/lib/format";
++import type { Expense, FinanceCategoryRow, FinanceHistoryRow } from "@/lib/types";
++
++/**
++ * Fonte única de verdade para todos os números financeiros do sistema.
++ *
++ * Antes desta função, o Início (lib/services/dashboard.ts) e o Financeiro
++ * (app/(app)/financeiro/page.tsx) recalculavam "vendas", "lucro" e "despesas"
++ * cada um com sua própria fórmula, e as fórmulas haviam divergido:
++ *
++ *  - Início somava apenas o valor da mercadoria como "Vendas".
++ *  - Financeiro somava `gross_total` (mercadoria + taxa de marketplace + frete)
++ *    e chamava isso de "Faturamento" — um número maior, mas na prática é o
++ *    total COBRADO do cliente, não a receita da empresa (taxa e frete são
++ *    repassados a terceiros).
++ *  - O "lucro" do Financeiro nunca descontava o frete, mesmo somando-o na
++ *    receita — inflando o resultado exatamente pelo total de fretes do período.
++ *
++ * Esta função resolve isso separando os dois conceitos explicitamente:
++ *
++ *  - `merchandise` (Vendas/Receita): preço × quantidade dos itens vendidos.
++ *    É a receita real da empresa e a base de todo cálculo de lucro.
++ *  - `billed` (Total faturado ao cliente): merchandise + taxa + frete. É
++ *    quanto o cliente deve pagar no total — usado só para caixa/recebíveis
++ *    (quanto falta receber), nunca para calcular lucro.
++ *
++ * Lucro = merchandise − custo do produto − taxa de marketplace − frete − mão de obra.
++ * Essa é a única fórmula de lucro do sistema; todas as telas consomem este resultado.
++ */
++export async function getFinanceSummary(supabase: SupabaseClient, organizationId: string) {
++  const [
++    { data: orders },
++    { data: items },
++    { data: payments },
++    { data: expenses },
++    { data: materialPurchases },
++    { data: settings },
++    { data: recurringExpenses },
++    { data: production },
++  ] = await Promise.all([
++    supabase
++      .from("orders")
++      .select(
++        "id,status,total,gross_total,shipping_cost,marketplace_fee,order_date,expected_date,completed_at"
++      ),
++    supabase
++      .from("order_items")
++      .select(
++        "order_id,product_name,quantity,unit_price,unit_cost,total,products(category),product_id"
++      ),
++    supabase.from("payments").select("order_id,amount,payment_date"),
++    supabase
++      .from("expenses")
++      .select(
++        "id,description,category,amount,status,due_date,paid_at,created_at,source_type,source_id"
++      )
++      .order("due_date", { ascending: false, nullsFirst: false }),
++    supabase.from("material_purchases").select("id,total_cost,created_at"),
++    supabase
++      .from("organization_settings")
++      .select("labor_hour_rate")
++      .eq("organization_id", organizationId)
++      .maybeSingle(),
++    supabase
++      .from("recurring_expenses")
++      .select("id,description,category,amount,day_of_month,active")
++      .order("created_at", { ascending: true }),
++    supabase.from("production_orders").select("id,status"),
++  ]);
++
++  const validOrders = (orders ?? []).filter((o) => !isCancelledStatus(o.status));
++  const validIds = new Set(validOrders.map((o) => o.id));
++  const validExpenses = ((expenses ?? []) as Expense[]).filter((e) => !isCancelledStatus(e.status));
++
++  const paymentsByOrder = new Map<string, number>();
++  for (const p of payments ?? [])
++    if (p.order_id && validIds.has(p.order_id))
++      paymentsByOrder.set(p.order_id, (paymentsByOrder.get(p.order_id) ?? 0) + n(p.amount));
++
++  const productIds = [
++    ...new Set((items ?? []).map((i) => i.product_id).filter((id): id is string => Boolean(id))),
++  ];
++  const laborCostByProduct = new Map<string, number>();
++  if (productIds.length) {
++    const { data } = await supabase
++      .from("product_pricing")
++      .select("product_id,labor_cost")
++      .in("product_id", productIds);
++    for (const p of data ?? []) laborCostByProduct.set(p.product_id, n(p.labor_cost));
++  }
++
++  const rowsMap: Record<string, FinanceCategoryRow> = {};
++  let totalMerchandise = 0,
++    totalBilled = 0,
++    totalReceived = 0,
++    totalCost = 0,
++    totalFees = 0,
++    totalShipping = 0,
++    totalLabor = 0,
++    totalQty = 0,
++    totalLaborItems = 0;
++
++  for (const order of validOrders) {
++    const orderItems = (items ?? []).filter((i) => i.order_id === order.id);
++    const merchandise = orderItems.reduce(
++      (s, i) => s + (n(i.total) || n(i.unit_price) * n(i.quantity)),
++      0
++    );
++    const billed = n(order.gross_total ?? order.total);
++    const fee = n(order.marketplace_fee);
++    const shipping = n(order.shipping_cost);
++    const received = paymentsByOrder.get(order.id) ?? 0;
++
++    totalMerchandise += merchandise;
++    totalBilled += billed;
++    totalFees += fee;
++    totalShipping += shipping;
++    totalReceived += received;
++
++    for (const item of orderItems) {
++      const product = Array.isArray(item.products) ? item.products[0] : item.products;
++      const category = product?.category || "Outros";
++      const qty = n(item.quantity);
++      const base = n(item.total) || n(item.unit_price) * qty;
++      const share = merchandise > 0 ? base / merchandise : 0;
++      const row =
++        rowsMap[category] ??
++        (rowsMap[category] = {
++          category,
++          qty: 0,
++          merchandise: 0,
++          billed: 0,
++          received: 0,
++          receivable: 0,
++          cost: 0,
++          fees: 0,
++          shipping: 0,
++          labor: 0,
++        });
++      const laborPerUnit = item.product_id ? (laborCostByProduct.get(item.product_id) ?? 0) : 0;
++      row.qty += qty;
++      row.merchandise += base;
++      row.billed += billed * share;
++      row.received += received * share;
++      row.cost += n(item.unit_cost) * qty;
++      row.fees += fee * share;
++      row.shipping += shipping * share;
++      row.labor += laborPerUnit * qty;
++      totalCost += n(item.unit_cost) * qty;
++      totalLabor += laborPerUnit * qty;
++      totalQty += qty;
++      if (laborPerUnit > 0) totalLaborItems += qty;
++    }
++  }
++
++  const categories = Object.values(rowsMap)
++    .map((row) => ({ ...row, receivable: Math.max(row.billed - row.received, 0) }))
++    .sort((a, b) => b.merchandise - a.merchandise);
++
++  const materialPurchasesTotal = (materialPurchases ?? []).reduce((s, p) => s + n(p.total_cost), 0);
++  // Despesas administrativas pagas: aluguel, marketing, assinaturas etc. Exclui compra de
++  // material (já embutida no custo do produto vendido, via unit_cost) e compra de
++  // equipamento (investimento/capex, não despesa operacional recorrente) — somar qualquer
++  // uma delas aqui contaria o mesmo custo duas vezes no lucro.
++  const paidExpenses = validExpenses
++    .filter((e) => isPaidStatus(e.status) && e.source_type !== "machine_purchase")
++    .reduce((s, e) => s + n(e.amount), 0);
++  const machineExpensesPaid = validExpenses
++    .filter((e) => isPaidStatus(e.status) && e.source_type === "machine_purchase")
++    .reduce((s, e) => s + n(e.amount), 0);
++  const unpaidExpenses = validExpenses.filter((e) => !isPaidStatus(e.status));
++  const payableTotal = unpaidExpenses.reduce((s, e) => s + n(e.amount), 0);
++  const today = new Date();
++  const overduePayableTotal = unpaidExpenses
++    .filter((e) => {
++      const due = validDate(e.due_date);
++      return due !== null && due < today;
++    })
++    .reduce((s, e) => s + n(e.amount), 0);
++
++  // Saídas de caixa: tudo que efetivamente saiu do bolso (diferente do lucro, que é
++  // apurado por competência). Inclui compra de material e de equipamento porque ambas
++  // são desembolso real, mesmo não sendo "despesa operacional" no sentido de resultado.
++  const totalCashOut = materialPurchasesTotal + paidExpenses + machineExpensesPaid;
++  const cashBalance = totalReceived - totalCashOut;
++  const recovery =
++    totalCashOut > 0 ? Math.max(0, Math.min(100, (totalReceived / totalCashOut) * 100)) : 100;
++
++  // Única fórmula de lucro do sistema: receita real (mercadoria) menos todos os custos
++  // atribuíveis à venda, inclusive o frete (que antes ficava de fora por engano).
++  const profit = totalMerchandise - totalCost - totalFees - totalShipping - totalLabor;
++  const receivable = Math.max(totalBilled - totalReceived, 0);
++
++  // --- Histórico mensal (visão de caixa, não de competência) ---
++  const historyMap = new Map<string, FinanceHistoryRow>();
++  const ensure = (key: string) => {
++    let row = historyMap.get(key);
++    if (!row) {
++      row = {
++        key,
++        label: monthLabel(key),
++        gross: 0,
++        received: 0,
++        receivable: 0,
++        purchases: 0,
++        expenses: 0,
++        equipment: 0,
++        outflow: 0,
++        cashResult: 0,
++        cumulative: 0,
++        payable: 0,
++      };
++      historyMap.set(key, row);
++    }
++    return row;
++  };
++  for (const o of validOrders) {
++    const k = monthKey(o.order_date);
++    if (k) ensure(k).gross += n(o.gross_total ?? o.total);
++  }
++  for (const p of payments ?? []) {
++    if (p.order_id && validIds.has(p.order_id)) {
++      const k = monthKey(p.payment_date);
++      if (k) ensure(k).received += n(p.amount);
++    }
++  }
++  for (const p of materialPurchases ?? []) {
++    const k = monthKey(p.created_at);
++    if (k) ensure(k).purchases += n(p.total_cost);
++  }
++  for (const e of validExpenses) {
++    const paid = isPaidStatus(e.status);
++    const paymentKey = monthKey(e.paid_at);
++    if (paid && paymentKey) {
++      const row = ensure(paymentKey);
++      if (e.source_type === "machine_purchase") row.equipment += n(e.amount);
++      else row.expenses += n(e.amount);
++    }
++  }
++
++  const keys = [...historyMap.keys()].sort();
++  const now = new Date();
++  const currentKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
++  const startKey = keys[0] ?? currentKey;
++  const allKeys: string[] = [];
++  {
++    let [y, m] = startKey.split("-").map(Number);
++    const [ey, em] = currentKey.split("-").map(Number);
++    while (y < ey || (y === ey && m <= em)) {
++      allKeys.push(`${y}-${String(m).padStart(2, "0")}`);
++      m++;
++      if (m === 13) {
++        m = 1;
++        y++;
++      }
++    }
++  }
++  const historyRows = allKeys.map(ensure);
++
++  let cumulative = 0;
++  for (const row of historyRows) {
++    row.outflow = row.purchases + row.expenses + row.equipment;
++    row.cashResult = row.received - row.outflow;
++    cumulative += row.cashResult;
++    row.cumulative = cumulative;
++    const [y, m] = row.key.split("-").map(Number);
++    const end = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
++    row.receivable = validOrders.reduce((s, o) => {
++      const od = validDate(o.order_date);
++      if (!od || od > end) return s;
++      const receivedByEnd = (payments ?? [])
++        .filter(
++          (p) =>
++            p.order_id === o.id &&
++            validIds.has(o.id) &&
++            validDate(p.payment_date) &&
++            validDate(p.payment_date)! <= end
++        )
++        .reduce((a, p) => a + n(p.amount), 0);
++      return s + Math.max(n(o.gross_total ?? o.total) - receivedByEnd, 0);
++    }, 0);
++    row.payable = validExpenses.reduce((s, e) => {
++      const created = validDate(e.created_at);
++      if (!created || created > end) return s;
++      const paid = isPaidStatus(e.status);
++      const paidAt = validDate(e.paid_at);
++      if (paid && paidAt && paidAt <= end) return s;
++      return s + n(e.amount);
++    }, 0);
++  }
++
++  return {
++    totals: {
++      qty: totalQty,
++      merchandise: totalMerchandise,
++      billed: totalBilled,
++      received: totalReceived,
++      receivable,
++      cost: totalCost,
++      fees: totalFees,
++      feeOrderCount: validOrders.filter((o) => n(o.marketplace_fee) > 0).length,
++      shipping: totalShipping,
++      labor: totalLabor,
++      laborItemCount: totalLaborItems,
++      profit,
++      materialPurchases: materialPurchasesTotal,
++      paidExpenses,
++      machineExpensesPaid,
++      payable: payableTotal,
++      overduePayable: overduePayableTotal,
++      totalCashOut,
++      cashBalance,
++      recovery,
++    },
++    categories,
++    historyRows,
++    laborHourRate: n(settings?.labor_hour_rate ?? 30),
++    recurringExpenses: recurringExpenses ?? [],
++    orders: orders ?? [],
++    production: production ?? [],
++  };
++}
++
++export type FinanceSummary = Awaited<ReturnType<typeof getFinanceSummary>>;
+diff --git a/lib/types.ts b/lib/types.ts
+index fa58d8f..3c5e629 100644
+--- a/lib/types.ts
++++ b/lib/types.ts
+@@ -30,11 +30,15 @@ export type RecurringExpense = {
+ export type FinanceCategoryRow = {
+   category: string;
+   qty: number;
+-  gross: number;
++  /** Receita real de mercadoria (preço × quantidade). Base do lucro. */
++  merchandise: number;
++  /** Valor total faturado ao cliente (mercadoria + taxa de marketplace + frete). Base do caixa/recebível. */
++  billed: number;
+   received: number;
+   receivable: number;
+   cost: number;
+   fees: number;
++  shipping: number;
+   labor: number;
+ };
+ 

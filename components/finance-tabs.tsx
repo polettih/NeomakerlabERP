@@ -78,7 +78,7 @@ export function FinanceTabs({
               <div className="value">{summary.qty}</div>
             </div>
             <div className="card">
-              <div className="label">Venda bruta</div>
+              <div className="label">Vendas</div>
               <div className="value">{money(summary.gross)}</div>
             </div>
             <div className="card">
@@ -93,7 +93,7 @@ export function FinanceTabs({
               <div className="label">Lucro líquido das vendas</div>
               <div className="value">{money(summary.profit)}</div>
               <p className="muted" style={{ marginTop: 4 }}>
-                Venda bruta − custo do produto − taxas − mão de obra.
+                Vendas − custo do produto − taxas − frete − mão de obra.
               </p>
             </div>
             <div className="card">
@@ -119,9 +119,10 @@ export function FinanceTabs({
                   <tr>
                     <th>Categoria</th>
                     <th>Itens</th>
-                    <th>Venda bruta</th>
+                    <th>Vendas</th>
                     <th>Recebido</th>
                     <th>Taxas</th>
+                    <th>Frete</th>
                     <th>Mão de obra</th>
                     <th>Lucro líquido</th>
                     <th>A receber</th>
@@ -134,17 +135,18 @@ export function FinanceTabs({
                         <strong>{r.category}</strong>
                       </td>
                       <td>{r.qty}</td>
-                      <td>{money(r.gross)}</td>
+                      <td>{money(r.merchandise)}</td>
                       <td>{money(r.received)}</td>
                       <td>{money(r.fees)}</td>
+                      <td>{money(r.shipping)}</td>
                       <td>{money(r.labor)}</td>
-                      <td>{money(r.gross - r.cost - r.fees - r.labor)}</td>
+                      <td>{money(r.merchandise - r.cost - r.fees - r.shipping - r.labor)}</td>
                       <td>{money(r.receivable)}</td>
                     </tr>
                   ))}
                   {!rows.length && (
                     <tr>
-                      <td colSpan={8} className="muted">
+                      <td colSpan={9} className="muted">
                         Ainda não existem vendas para consolidar.
                       </td>
                     </tr>
@@ -170,7 +172,7 @@ export function FinanceTabs({
             <div className="value">{money(fees.count ? fees.total / fees.count : 0)}</div>
           </div>
           <div className="card">
-            <div className="label">Participação na venda bruta</div>
+            <div className="label">Participação nas vendas</div>
             <div className="value">
               {summary.gross ? ((fees.total / summary.gross) * 100).toFixed(2) + "%" : "0,00%"}
             </div>

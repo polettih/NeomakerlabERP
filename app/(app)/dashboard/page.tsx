@@ -55,8 +55,9 @@ export default async function DashboardPage() {
           <div className="value">{d.itemsSold}</div>
         </div>
         <Link className="card" href="/gastos-e-compras">
-          <div className="label">Despesas</div>
+          <div className="label">Despesas pagas</div>
           <div className="value">{money(d.costs)}</div>
+          <small className="muted">Não inclui material nem equipamentos</small>
         </Link>
       </div>
 
