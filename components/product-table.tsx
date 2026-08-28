@@ -1,9 +1,8 @@
 "use client";
 import { useMemo, useState } from "react";
 import { ProductActions } from "@/components/product-actions";
-import { ProductEditor } from "@/components/product-editor";
-
-const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+import { ProductEditor, type Material, type Machine } from "@/components/product-editor";
+import { money } from "@/lib/format";
 
 type Img = { id: string; public_url: string; storage_path: string; sort_order: number };
 type Product = {
@@ -26,8 +25,8 @@ export function ProductTable({
   energyCostKwh,
 }: {
   products: Product[];
-  materials: any[];
-  machines: any[];
+  materials: Material[];
+  machines: Machine[];
   laborHourRate: number;
   energyCostKwh: number;
 }) {
@@ -79,7 +78,7 @@ export function ProductTable({
           <select
             className="select"
             value={status}
-            onChange={(e) => setStatus(e.target.value as any)}
+            onChange={(e) => setStatus(e.target.value as "all" | "active" | "inactive")}
           >
             <option value="all">Todos os status</option>
             <option value="active">Disponíveis</option>
@@ -95,7 +94,7 @@ export function ProductTable({
             <th>Status</th>
             <th>Preço</th>
             <th>Custo</th>
-            <th>Margem</th>
+            <th>Lucro</th>
             <th>Ações</th>
           </tr>
         </thead>

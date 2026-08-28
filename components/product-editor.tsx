@@ -1,15 +1,13 @@
 "use client";
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { money, n } from "@/lib/format";
+import { errorMessage } from "@/lib/errors";
 const cats = ["Bonecos", "Objetos", "Miniaturas", "Decoração", "Outros"];
-const money = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const weight = (u: string) => ["kg", "g", "grama", "gramas"].includes((u || "").toLowerCase());
-const costOf = (m: any, q: number) => {
+const costOf = (m: Material | undefined, q: number) => {
   if (!m) return 0;
-  return (m.unit || "").toLowerCase() === "kg"
-    ? (q / 1000) * Number(m.average_cost || 0)
-    : q * Number(m.average_cost || 0);
+  return (m.unit || "").toLowerCase() === "kg" ? (q / 1000) * n(m.average_cost) : q * n(m.average_cost);
 };
 type Img = { id: string; public_url: string; storage_path: string; sort_order: number };
 type Product = {
@@ -20,7 +18,7 @@ type Product = {
   category: string;
   images: Img[];
 };
-type Material = {
+export type Material = {
   id: string;
   name: string;
   category: string;
@@ -30,7 +28,7 @@ type Material = {
   color_name?: string;
   color_hex?: string;
 };
-type Machine = {
+export type Machine = {
   id: string;
   name: string;
   category: string;
@@ -38,6 +36,7 @@ type Machine = {
   depreciation_per_hour: number;
   active: boolean;
 };
+type ExtraLink = { material_id: string; usage_type: string; quantity: number; displayQty?: number };
 export function ProductEditor({
   product,
   materials,
@@ -59,7 +58,7 @@ export function ProductEditor({
     [error, setError] = useState("");
   const [name, setName] = useState(product.name),
     [category, setCategory] = useState(product.category || "Bonecos"),
-    [price, setPrice] = useState(String(product.sale_price)),
+    [priceOverride, setPriceOverride] = useState(String(product.sale_price)),
     [images, setImages] = useState(product.images || []);
   const [fdmEnabled, setFdmEnabled] = useState(false),
     [resinEnabled, setResinEnabled] = useState(false),
@@ -71,7 +70,7 @@ export function ProductEditor({
     [resinMaterialId, setResinMaterialId] = useState(""),
     [fdmQty, setFdmQty] = useState("0"),
     [resinQty, setResinQty] = useState("0"),
-    [extraLinks, setExtraLinks] = useState<any[]>([]),
+    [extraLinks, setExtraLinks] = useState<ExtraLink[]>([]),
     [paintingHours, setPaintingHours] = useState("0"),
     [finishingHours, setFinishingHours] = useState("0"),
     [paintingMaterials, setPaintingMaterials] = useState("0"),
@@ -113,7 +112,10 @@ export function ProductEditor({
     extras = Number(paintingMaterials) + Number(packagingCost) + Number(otherCost),
     total = materialCost + waste + energyCost + depreciation + labor + extras,
     suggested = total * (1 + Number(marginPercent || 0) / 100),
-    profit = suggested - total;
+    profit = suggested - total,
+    finalPrice = Number(priceOverride) || 0,
+    finalProfit = finalPrice - total,
+    finalMarginPercent = total > 0 ? (finalProfit / total) * 100 : 0;
   async function openEditor() {
     setOpen(true);
     setLoading(true);
@@ -127,8 +129,8 @@ export function ProductEditor({
         links = await pm.json();
       if (!pr.ok) throw new Error(pricing.error);
       if (!pm.ok) throw new Error(links.error);
-      const f = links.find((x: any) => x.usage_type === "fdm"),
-        res = links.find((x: any) => x.usage_type === "resin");
+      const f = links.find((x: ExtraLink) => x.usage_type === "fdm"),
+        res = links.find((x: ExtraLink) => x.usage_type === "resin");
       setFdmEnabled(!!f || !!pricing?.fdm_machine_id);
       setResinEnabled(!!res || !!pricing?.resin_machine_id);
       setFdmMachineId(pricing?.fdm_machine_id || "");
@@ -137,16 +139,16 @@ export function ProductEditor({
       setResinMaterialId(pricing?.resin_material_id || res?.material_id || "");
       setFdmHours(String(pricing?.filament_hours ?? 0));
       setResinHours(String(pricing?.resin_hours ?? 0));
-      const toDisplay = (x: any) => {
-        const m = materials.find((a: any) => a.id === x.material_id);
+      const toDisplay = (x: ExtraLink) => {
+        const m = materials.find((a) => a.id === x.material_id);
         return m?.unit?.toLowerCase() === "kg" ? Number(x.quantity) * 1000 : Number(x.quantity);
       };
       setFdmQty(String(f ? toDisplay(f) : 0));
       setResinQty(String(res ? toDisplay(res) : 0));
       setExtraLinks(
         links
-          .filter((x: any) => !["fdm", "resin"].includes(x.usage_type))
-          .map((x: any) => ({ ...x, displayQty: toDisplay(x) }))
+          .filter((x: ExtraLink) => !["fdm", "resin"].includes(x.usage_type))
+          .map((x: ExtraLink) => ({ ...x, displayQty: toDisplay(x) }))
       );
       setPaintingHours(String(pricing?.painting_hours ?? 0));
       setFinishingHours(String(pricing?.finishing_hours ?? 0));
@@ -155,9 +157,11 @@ export function ProductEditor({
       setOtherCost(String(pricing?.other_cost ?? 0));
       setLossPercent(String(Number(pricing?.loss_percent ?? 0) * 100));
       setMarginPercent(String(Number(pricing?.margin_percent ?? 0) * 100));
-      setPrice(String(product.sale_price));
-    } catch (e: any) {
-      setError(e.message || "Erro ao carregar produto.");
+      // Preserva o preço de venda já praticado — só muda se o lojista editar
+      // o campo ou clicar em "Usar preço sugerido".
+      setPriceOverride(String(product.sale_price));
+    } catch (e) {
+      setError(errorMessage(e, "Erro ao carregar produto."));
     } finally {
       setLoading(false);
     }
@@ -177,10 +181,12 @@ export function ProductEditor({
         (!resinMachineId || !resinMaterialId || Number(resinHours) <= 0 || Number(resinQty) <= 0)
       )
         throw new Error("Preencha impressora, horas e resina.");
+      if (!Number.isFinite(finalPrice) || finalPrice <= 0)
+        throw new Error("Informe um preço de venda válido.");
       const res = await fetch(`/api/products/${product.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, sale_price: suggested, estimated_cost: total, category }),
+        body: JSON.stringify({ name, sale_price: finalPrice, estimated_cost: total, category }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error);
@@ -190,7 +196,7 @@ export function ProductEditor({
         body: JSON.stringify({ product_id: product.id }),
       });
       if (!del.ok) throw new Error("Não foi possível atualizar os materiais do produto.");
-      const links: any[] = [];
+      const links: ExtraLink[] = [];
       if (fdmEnabled)
         links.push({
           material_id: fdmMaterialId,
@@ -261,8 +267,8 @@ export function ProductEditor({
       if (!pp.ok) throw new Error((await pp.json()).error || "Erro ao salvar precificação.");
       setOpen(false);
       r.refresh();
-    } catch (e: any) {
-      setError(e.message || "Erro");
+    } catch (e) {
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -303,8 +309,8 @@ export function ProductEditor({
         .select("id,public_url,storage_path,sort_order");
       if (ins.error) throw ins.error;
       setImages([...images, ...(ins.data as Img[])]);
-    } catch (e: any) {
-      setError(e.message || "Erro");
+    } catch (e) {
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -317,8 +323,8 @@ export function ProductEditor({
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Erro");
       setImages(images.filter((x) => x.id !== img.id));
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -343,7 +349,11 @@ export function ProductEditor({
                 Fechar
               </button>
             </div>
-            {error && <div className="error">{error}</div>}
+            {error && (
+              <div className="error" role="alert">
+                {error}
+              </div>
+            )}
             {loading ? (
               <p>Carregando configuração...</p>
             ) : (
@@ -367,8 +377,28 @@ export function ProductEditor({
                       ))}
                     </select>
                   </Field>
-                  <Field label="Preço atual sugerido">
+                  <Field label="Preço sugerido">
                     <div className="input">{money(suggested)}</div>
+                  </Field>
+                  <Field label="Preço de venda">
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input
+                        className="input"
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        value={priceOverride}
+                        onChange={(e) => setPriceOverride(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setPriceOverride(suggested.toFixed(2))}
+                        title="Usar o preço calculado pela fórmula"
+                      >
+                        Usar sugerido
+                      </button>
+                    </div>
                   </Field>
                 </div>
                 <div className="section-title">
@@ -623,9 +653,21 @@ export function ProductEditor({
                       <span className="value">{money(suggested)}</span>
                     </p>
                     <p>
-                      <strong>Lucro líquido estimado</strong>
+                      <strong>Lucro no preço sugerido</strong>
                       <br />
                       <span className="value">{money(profit)}</span>
+                    </p>
+                    <p>
+                      <strong>Preço de venda escolhido</strong>
+                      <br />
+                      <span className="value">{money(finalPrice)}</span>
+                    </p>
+                    <p>
+                      <strong>Lucro no preço escolhido</strong>
+                      <br />
+                      <span className={`value ${finalProfit < 0 ? "error" : ""}`}>
+                        {money(finalProfit)} ({finalMarginPercent.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%)
+                      </span>
                     </p>
                   </div>
                 </div>

@@ -1,11 +1,12 @@
 "use client";
-import { FormEvent, useMemo, useRef, useState, type ReactNode } from "react";
+import { FormEvent, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { FormTabs } from "@/components/form-tabs";
+import { money } from "@/lib/format";
+import { errorMessage } from "@/lib/errors";
 
 const cats = ["Bonecos", "Objetos", "Miniaturas", "Decoração", "Outros"];
-const money = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 type Material = {
   id: string;
   name: string;
@@ -74,6 +75,7 @@ export function CreateProductForm({ materials, machines, laborHourRate, energyCo
     [otherCost, setOtherCost] = useState("0"),
     [lossPercent, setLossPercent] = useState("8"),
     [marginPercent, setMarginPercent] = useState("20");
+  const [priceOverride, setPriceOverride] = useState("");
   const fdmMachine = fdmMachines.find((m) => m.id === fdmMachineId),
     resinMachine = resinMachines.find((m) => m.id === resinMachineId),
     fdmMaterial = fdmMaterials.find((m) => m.id === fdmMaterialId),
@@ -104,6 +106,8 @@ export function CreateProductForm({ materials, machines, laborHourRate, energyCo
   const total = materialCost + waste + energyCost + depreciation + labor + extras;
   const suggested = total * (1 + Number(marginPercent || 0) / 100);
   const profit = suggested - total;
+  const finalPrice = priceOverride !== "" ? Number(priceOverride) || 0 : suggested;
+  const finalProfit = finalPrice - total;
   function addExtra() {
     if (!extraMaterialId || Number(extraQty) <= 0) return;
     setExtraLinks((x) => [
@@ -135,6 +139,7 @@ export function CreateProductForm({ materials, machines, laborHourRate, energyCo
     setOtherCost("0");
     setLossPercent("8");
     setMarginPercent("20");
+    setPriceOverride("");
   }
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -152,6 +157,8 @@ export function CreateProductForm({ materials, machines, laborHourRate, energyCo
     )
       return setError("Preencha impressora, horas e resina.");
     if (files && files.length > 8) return setError("Máximo de 8 fotos.");
+    if (!Number.isFinite(finalPrice) || finalPrice <= 0)
+      return setError("Informe um preço de venda válido.");
     setBusy(true);
     try {
       const res = await fetch("/api/products", {
@@ -160,7 +167,7 @@ export function CreateProductForm({ materials, machines, laborHourRate, energyCo
         body: JSON.stringify({
           name: name.trim(),
           category,
-          sale_price: suggested,
+          sale_price: finalPrice,
           estimated_cost: total,
         }),
       });
@@ -173,7 +180,12 @@ export function CreateProductForm({ materials, machines, laborHourRate, energyCo
           data: { user },
         } = await sb.auth.getUser();
         if (!user) throw new Error("Sessão expirada.");
-        const rows: any[] = [];
+        const rows: {
+          product_id: string;
+          storage_path: string;
+          public_url: string;
+          sort_order: number;
+        }[] = [];
         for (let i = 0; i < files.length; i++) {
           const f = files[i];
           const ext = f.name.split(".").pop()?.toLowerCase() || "jpg";
@@ -273,8 +285,8 @@ export function CreateProductForm({ materials, machines, laborHourRate, energyCo
       reset();
       setOpen(false);
       r.refresh();
-    } catch (err: any) {
-      setError(err.message || "Erro.");
+    } catch (err) {
+      setError(errorMessage(err, "Erro."));
     } finally {
       setBusy(false);
     }
@@ -712,11 +724,34 @@ export function CreateProductForm({ materials, machines, laborHourRate, energyCo
                 <strong>Preço sugerido</strong>
                 <br />
                 <span className="value">{money(suggested)}</span>
+                <br />
+                <small className="muted">Lucro no sugerido: {money(profit)}</small>
               </p>
               <p>
-                <strong>Lucro líquido estimado</strong>
+                <strong>Preço de venda</strong>
                 <br />
-                <span className="value">{money(profit)}</span>
+                <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                  <input
+                    className="input"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    placeholder={suggested.toFixed(2)}
+                    value={priceOverride}
+                    onChange={(e) => setPriceOverride(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setPriceOverride("")}
+                    title="Usar o preço calculado pela fórmula"
+                  >
+                    Usar sugerido
+                  </button>
+                </div>
+                <small className={`muted ${finalProfit < 0 ? "error" : ""}`}>
+                  Lucro no preço escolhido: {money(finalProfit)}
+                </small>
               </p>
             </div>
           </div>

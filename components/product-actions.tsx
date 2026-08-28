@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 export function ProductActions({ id, active }: { id: string; active: boolean }) {
   const [busy, setBusy] = useState(false);
   const r = useRouter();
-  async function patch(body: any) {
+  async function patch(body: { active: boolean }) {
     setBusy(true);
     const res = await fetch(`/api/products/${id}`, {
       method: "PATCH",
