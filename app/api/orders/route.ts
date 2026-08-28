@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { errorMessage } from "@/lib/errors";
+
+type OrderItemInput = { product_id: string; quantity?: number };
+
 export async function POST(request: Request) {
   const { supabase } = await requireUser();
   try {
@@ -12,13 +16,13 @@ export async function POST(request: Request) {
       .limit(1)
       .single();
     if (!member) throw new Error("Organização não encontrada.");
-    const ids = body.items.map((i: any) => i.product_id);
+    const ids = (body.items as OrderItemInput[]).map((i) => i.product_id);
     const { data: products, error: pe } = await supabase
       .from("products")
       .select("id,name,sale_price,estimated_cost")
       .in("id", ids);
     if (pe) throw pe;
-    const items = body.items.map((i: any) => {
+    const items = (body.items as OrderItemInput[]).map((i) => {
       const p = products?.find((x) => x.id === i.product_id);
       if (!p) throw new Error("Produto inválido.");
       const q = Math.max(Number(i.quantity || 1), 1);
@@ -32,7 +36,7 @@ export async function POST(request: Request) {
         total: Number(p.sale_price) * q,
       };
     });
-    const subtotal = items.reduce((s: number, i: any) => s + i.total, 0);
+    const subtotal = items.reduce((s, i) => s + i.total, 0);
     const discount = Math.max(Number(body.discount || 0), 0);
     const merchandiseTotal = Math.max(subtotal - discount, 0);
     const shipping = Math.max(Number(body.shipping_cost || 0), 0);
@@ -92,7 +96,7 @@ export async function POST(request: Request) {
     if (oe) throw oe;
     const { error: ie } = await supabase
       .from("order_items")
-      .insert(items.map((i: any) => ({ ...i, order_id: order.id })));
+      .insert(items.map((i) => ({ ...i, order_id: order.id })));
     if (ie) throw ie;
     const { error: he } = await supabase
       .from("order_status_history")
@@ -119,7 +123,7 @@ export async function POST(request: Request) {
       });
     if (pr) throw pr;
     return NextResponse.json(order);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Erro interno" }, { status: 500 });
+  } catch (e) {
+    return NextResponse.json({ error: errorMessage(e, "Erro interno") }, { status: 500 });
   }
 }

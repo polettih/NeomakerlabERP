@@ -2,11 +2,12 @@
 import { useMemo, useState } from "react";
 import { OrderStatusActions } from "@/components/order-status-actions";
 import { OrderDeleteButton } from "@/components/order-delete-button";
+import { RegisterPaymentButton } from "@/components/register-payment-button";
+import { money } from "@/lib/format";
 
-const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
 
-type Order = {
+export type Order = {
   id: string;
   status: string;
   payment_status: string;
@@ -17,16 +18,36 @@ type Order = {
   completed_at: string | null;
   customers: { name: string } | null;
   sales_channels: { name: string } | null;
+  received: number;
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  pending: "Pendente",
-  in_production: "Em produção",
-  ready: "Pronto",
+  new: "Novo",
+  preparation: "Preparação",
+  production: "Produção",
+  finishing: "Acabamento",
+  packaging: "Embalagem",
   shipped: "Enviado",
   delivered: "Finalizado",
   cancelled: "Cancelado",
 };
+
+const PAYMENT_LABEL: Record<string, string> = {
+  pending: "A receber",
+  partial: "Parcial",
+  paid: "Pago",
+  refunded: "Estornado",
+  cancelled: "Cancelado",
+};
+
+const PAYMENT_CLASS: Record<string, string> = {
+  pending: "kpi-yellow",
+  partial: "kpi-yellow",
+  paid: "kpi-green",
+  refunded: "",
+  cancelled: "",
+};
+
 
 export function OrderTable({ orders }: { orders: Order[] }) {
   const [q, setQ] = useState("");
@@ -86,7 +107,7 @@ export function OrderTable({ orders }: { orders: Order[] }) {
             <option value="all">Todo pagamento</option>
             {payments.map((p) => (
               <option key={p} value={p}>
-                {p}
+                {PAYMENT_LABEL[p] ?? p}
               </option>
             ))}
           </select>
@@ -133,11 +154,28 @@ export function OrderTable({ orders }: { orders: Order[] }) {
                   <OrderStatusActions id={o.id} status={o.status} />
                 </td>
                 <td>
-                  <span className="badge">{o.payment_status}</span>
+                  <span className={`badge ${PAYMENT_CLASS[o.payment_status] ?? ""}`}>
+                    {PAYMENT_LABEL[o.payment_status] ?? o.payment_status}
+                  </span>
+                  {o.received > 0 && o.payment_status !== "paid" && (
+                    <small className="muted" style={{ display: "block" }}>
+                      {money(o.received)} recebido
+                    </small>
+                  )}
                 </td>
                 <td>{money(Number(o.gross_total ?? o.total))}</td>
                 <td>
-                  <OrderDeleteButton id={o.id} />
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
+                    {o.status !== "cancelled" &&
+                      o.payment_status !== "paid" &&
+                      o.payment_status !== "refunded" && (
+                        <RegisterPaymentButton
+                          orderId={o.id}
+                          remaining={Math.max(Number(o.gross_total ?? o.total) - o.received, 0)}
+                        />
+                      )}
+                    <OrderDeleteButton id={o.id} />
+                  </div>
                 </td>
               </tr>
             ))}

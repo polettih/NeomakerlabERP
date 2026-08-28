@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { errorMessage } from "@/lib/errors";
 
 const allowed = [
   "new",
@@ -23,7 +24,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .eq("id", id)
       .single();
     if (oe) throw oe;
-    const update: any = {};
+    const update: Record<string, unknown> = {};
     if (body.status !== undefined) {
       if (!allowed.includes(body.status))
         return NextResponse.json({ error: "Status inválido." }, { status: 400 });
@@ -78,8 +79,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
     }
     return NextResponse.json(data);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Erro ao atualizar pedido." }, { status: 500 });
+  } catch (e) {
+    return NextResponse.json({ error: errorMessage(e, "Erro ao atualizar pedido.") }, { status: 500 });
   }
 }
 
@@ -90,9 +91,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     const { error } = await supabase.rpc("delete_order_with_stock_restore", { p_order: id });
     if (error) throw error;
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
+  } catch (e) {
     return NextResponse.json(
-      { error: e.message || "Não foi possível excluir o pedido." },
+      { error: errorMessage(e, "Não foi possível excluir o pedido.") },
       { status: 500 }
     );
   }
