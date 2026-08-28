@@ -21,6 +21,10 @@ export async function getDashboard() {
     // equipamento (investimento, não despesa operacional recorrente).
     costs: summary.totals.paidExpenses,
     profit: summary.totals.profit,
+    // Caixa disponível = tudo que já foi recebido menos tudo que já saiu (compras de
+    // material + despesas pagas + equipamentos). Pode ficar negativo — é o mesmo
+    // número do card "Caixa disponível acumulado" em Financeiro.
+    cashBalance: summary.totals.cashBalance,
     itemsSold: summary.totals.qty,
     orders: summary.orders,
     production: summary.production,

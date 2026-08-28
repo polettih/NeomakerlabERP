@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getDashboard } from "@/lib/services/dashboard";
+import { signedMoney } from "@/lib/format";
 const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 export default async function DashboardPage() {
   const d = await getDashboard();
@@ -20,6 +21,13 @@ export default async function DashboardPage() {
         Resultado
       </p>
       <div className="grid cards">
+        <div className="card">
+          <div className="label">Caixa disponível</div>
+          <div className={`value ${d.cashBalance < 0 ? "error" : "kpi-green"}`}>
+            {signedMoney(d.cashBalance)}
+          </div>
+          <small className="muted">Recebido − saídas pagas</small>
+        </div>
         <div className="card">
           <div className="label">Vendas</div>
           <div className="value">{money(d.sales)}</div>
@@ -79,7 +87,7 @@ export default async function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {d.categories.map((r: any) => (
+                {d.categories.map((r) => (
                   <tr key={r.category}>
                     <td>
                       <strong>{r.category}</strong>
