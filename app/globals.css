@@ -79,3 +79,15 @@ th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04
   display: grid;
   gap: 18px;
 }
+
+/* Separa visualmente FDM / Resina / Insumos dentro da aba "Materiais
+   consumidos" do formulário de produto, sem precisar de sub-abas. */
+.material-block {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 14px;
+}
+.material-block:last-child {
+  margin-bottom: 0;
+}

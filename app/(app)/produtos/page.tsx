@@ -14,7 +14,7 @@ export default async function ProdutosPage() {
         .order("created_at", { ascending: false }),
       supabase
         .from("materials")
-        .select("id,name,category,unit,average_cost")
+        .select("id,name,category,material_type,color_name,unit,average_cost")
         .eq("active", true)
         .eq("organization_id", organizationId)
         .order("name"),
