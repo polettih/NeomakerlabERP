@@ -402,135 +402,144 @@ export function ProductEditor({
                   </Field>
                 </div>
                 <div className="section-title">
-                  <h3>🖨️ FDM</h3>
-                  <label className="check-row">
+                  <h3>🧵 Materiais consumidos</h3>
+                </div>
+                <div className="material-block">
+                  <label className="check-row" style={{ marginBottom: 12 }}>
                     <input
                       type="checkbox"
                       checked={fdmEnabled}
                       onChange={(e) => setFdmEnabled(e.target.checked)}
                     />{" "}
-                    Usar FDM
+                    <strong>🖨️ Usar FDM</strong>
                   </label>
+                  {fdmEnabled && (
+                    <div className="form-grid">
+                      <Field label="Máquina">
+                        <select
+                          className="select"
+                          value={fdmMachineId}
+                          onChange={(e) => setFdmMachineId(e.target.value)}
+                        >
+                          <option value="">Selecione</option>
+                          {fdmMachines.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Horas">
+                        <input
+                          className="input"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={fdmHours}
+                          onChange={(e) => setFdmHours(e.target.value)}
+                        />
+                      </Field>
+                      <Field label="Material">
+                        <select
+                          className="select"
+                          value={fdmMaterialId}
+                          onChange={(e) => setFdmMaterialId(e.target.value)}
+                        >
+                          <option value="">Selecione</option>
+                          {fdmMaterials.length === 0 && (
+                            <option value="" disabled>
+                              Nenhum filamento cadastrado em Estoque
+                            </option>
+                          )}
+                          {fdmMaterials.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name} {m.color_name ? `— ${m.color_name}` : ""} —{" "}
+                              {money(Number(m.average_cost))}/{m.unit}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label={"Quantidade (g)"}>
+                        <input
+                          className="input"
+                          type="number"
+                          step="0.001"
+                          min="0"
+                          value={fdmQty}
+                          onChange={(e) => setFdmQty(e.target.value)}
+                        />
+                      </Field>
+                    </div>
+                  )}
                 </div>
-                {fdmEnabled && (
-                  <div className="form-grid">
-                    <Field label="Máquina">
-                      <select
-                        className="select"
-                        value={fdmMachineId}
-                        onChange={(e) => setFdmMachineId(e.target.value)}
-                      >
-                        <option value="">Selecione</option>
-                        {fdmMachines.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label="Horas">
-                      <input
-                        className="input"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={fdmHours}
-                        onChange={(e) => setFdmHours(e.target.value)}
-                      />
-                    </Field>
-                    <Field label="Material">
-                      <select
-                        className="select"
-                        value={fdmMaterialId}
-                        onChange={(e) => setFdmMaterialId(e.target.value)}
-                      >
-                        <option value="">Selecione</option>
-                        {fdmMaterials.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name} {m.color_name ? `— ${m.color_name}` : ""} —{" "}
-                            {money(Number(m.average_cost))}/{m.unit}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label={"Quantidade (g)"}>
-                      <input
-                        className="input"
-                        type="number"
-                        step="0.001"
-                        min="0"
-                        value={fdmQty}
-                        onChange={(e) => setFdmQty(e.target.value)}
-                      />
-                    </Field>
-                  </div>
-                )}
-                {
-                  <div className="section-title">
-                    <h3>🧪 Resina</h3>
-                    <label className="check-row">
-                      <input
-                        type="checkbox"
-                        checked={resinEnabled}
-                        onChange={(e) => setResinEnabled(e.target.checked)}
-                      />{" "}
-                      Usar resina
-                    </label>
-                  </div>
-                }
-                {resinEnabled && (
-                  <div className="form-grid">
-                    <Field label="Impressora">
-                      <select
-                        className="select"
-                        value={resinMachineId}
-                        onChange={(e) => setResinMachineId(e.target.value)}
-                      >
-                        <option value="">Selecione</option>
-                        {resinMachines.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label="Horas">
-                      <input
-                        className="input"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={resinHours}
-                        onChange={(e) => setResinHours(e.target.value)}
-                      />
-                    </Field>
-                    <Field label="Resina">
-                      <select
-                        className="select"
-                        value={resinMaterialId}
-                        onChange={(e) => setResinMaterialId(e.target.value)}
-                      >
-                        <option value="">Selecione</option>
-                        {resinMaterials.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name} {m.color_name ? `— ${m.color_name}` : ""} —{" "}
-                            {money(Number(m.average_cost))}/{m.unit}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label={"Quantidade (ml)"}>
-                      <input
-                        className="input"
-                        type="number"
-                        step="0.001"
-                        min="0"
-                        value={resinQty}
-                        onChange={(e) => setResinQty(e.target.value)}
-                      />
-                    </Field>
-                  </div>
-                )}
+                <div className="material-block">
+                  <label className="check-row" style={{ marginBottom: 12 }}>
+                    <input
+                      type="checkbox"
+                      checked={resinEnabled}
+                      onChange={(e) => setResinEnabled(e.target.checked)}
+                    />{" "}
+                    <strong>🧪 Usar resina</strong>
+                  </label>
+                  {resinEnabled && (
+                    <div className="form-grid">
+                      <Field label="Impressora">
+                        <select
+                          className="select"
+                          value={resinMachineId}
+                          onChange={(e) => setResinMachineId(e.target.value)}
+                        >
+                          <option value="">Selecione</option>
+                          {resinMachines.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Horas">
+                        <input
+                          className="input"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={resinHours}
+                          onChange={(e) => setResinHours(e.target.value)}
+                        />
+                      </Field>
+                      <Field label="Resina">
+                        <select
+                          className="select"
+                          value={resinMaterialId}
+                          onChange={(e) => setResinMaterialId(e.target.value)}
+                        >
+                          <option value="">Selecione</option>
+                          {resinMaterials.length === 0 && (
+                            <option value="" disabled>
+                              Nenhuma resina cadastrada em Estoque
+                            </option>
+                          )}
+                          {resinMaterials.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name} {m.color_name ? `— ${m.color_name}` : ""} —{" "}
+                              {money(Number(m.average_cost))}/{m.unit}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label={"Quantidade (ml)"}>
+                        <input
+                          className="input"
+                          type="number"
+                          step="0.001"
+                          min="0"
+                          value={resinQty}
+                          onChange={(e) => setResinQty(e.target.value)}
+                        />
+                      </Field>
+                    </div>
+                  )}
+                </div>
                 <div className="section-title">
                   <h3>🎨 Pintura e acabamento</h3>
                 </div>
