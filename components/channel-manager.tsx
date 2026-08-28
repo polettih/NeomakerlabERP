@@ -14,10 +14,12 @@ export function ChannelManager({ channels }: { channels: Channel[] }) {
   const [fee, setFee] = useState("");
   const [fixed, setFixed] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const r = useRouter();
   async function create() {
-    if (!name.trim()) return;
+    if (!name.trim()) return setError("Informe o nome do canal.");
     setBusy(true);
+    setError("");
     const res = await fetch("/api/sales-channels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -29,7 +31,7 @@ export function ChannelManager({ channels }: { channels: Channel[] }) {
     });
     const j = await res.json();
     setBusy(false);
-    if (!res.ok) alert(j.error || "Erro");
+    if (!res.ok) setError(j.error || "Erro ao criar canal.");
     else {
       setName("");
       setFee("");
@@ -39,6 +41,7 @@ export function ChannelManager({ channels }: { channels: Channel[] }) {
   }
   async function update(id: string, body: any) {
     setBusy(true);
+    setError("");
     const res = await fetch(`/api/sales-channels/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -46,16 +49,17 @@ export function ChannelManager({ channels }: { channels: Channel[] }) {
     });
     const j = await res.json();
     setBusy(false);
-    if (!res.ok) alert(j.error || "Erro");
+    if (!res.ok) setError(j.error || "Erro ao atualizar canal.");
     else r.refresh();
   }
   async function remove(id: string) {
     if (!confirm("Excluir este canal? Pedidos existentes ficarão sem canal.")) return;
     setBusy(true);
+    setError("");
     const res = await fetch(`/api/sales-channels/${id}`, { method: "DELETE" });
     const j = await res.json();
     setBusy(false);
-    if (!res.ok) alert(j.error || "Erro");
+    if (!res.ok) setError(j.error || "Erro ao excluir canal.");
     else r.refresh();
   }
   return (
@@ -64,6 +68,7 @@ export function ChannelManager({ channels }: { channels: Channel[] }) {
       <p className="muted">
         Configure as taxas que serão adicionadas à venda bruta quando o canal for selecionado.
       </p>
+      {error && <div className="error">{error}</div>}
       <div className="form-grid">
         <div className="field">
           <label>Novo canal</label>
