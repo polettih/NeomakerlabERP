@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { OrderStatusActions } from "@/components/order-status-actions";
 import { OrderDeleteButton } from "@/components/order-delete-button";
 import { RegisterPaymentButton } from "@/components/register-payment-button";
+import { OrderPayments, type Payment } from "@/components/order-payments";
 import { money } from "@/lib/format";
 
 const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
@@ -19,6 +20,7 @@ export type Order = {
   customers: { name: string } | null;
   sales_channels: { name: string } | null;
   received: number;
+  payments: Payment[];
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -174,6 +176,7 @@ export function OrderTable({ orders }: { orders: Order[] }) {
                           remaining={Math.max(Number(o.gross_total ?? o.total) - o.received, 0)}
                         />
                       )}
+                    <OrderPayments payments={o.payments} />
                     <OrderDeleteButton id={o.id} />
                   </div>
                 </td>

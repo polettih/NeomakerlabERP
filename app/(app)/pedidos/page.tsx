@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import Link from "next/link";
 import { OrderTable, type Order } from "@/components/order-table";
+import type { Payment } from "@/components/order-payments";
 
 export default async function PedidosPage() {
   const { supabase } = await requireUser();
@@ -11,18 +12,23 @@ export default async function PedidosPage() {
         "id,status,payment_status,total,gross_total,order_date,expected_date,completed_at,customers(name),sales_channels(name)"
       )
       .order("order_date", { ascending: false }),
-    supabase.from("payments").select("order_id,amount"),
+    supabase
+      .from("payments")
+      .select("id,order_id,amount,payment_method,payment_date")
+      .order("payment_date", { ascending: false }),
   ]);
 
-  const receivedByOrder = new Map<string, number>();
+  const paymentsByOrder = new Map<string, Payment[]>();
   for (const p of payments ?? []) {
     if (!p.order_id) continue;
-    receivedByOrder.set(p.order_id, (receivedByOrder.get(p.order_id) ?? 0) + Number(p.amount));
+    const list = paymentsByOrder.get(p.order_id) ?? [];
+    list.push(p as Payment);
+    paymentsByOrder.set(p.order_id, list);
   }
-  const withReceived = (orders ?? []).map((o) => ({
-    ...o,
-    received: receivedByOrder.get(o.id) ?? 0,
-  }));
+  const withPayments = (orders ?? []).map((o) => {
+    const list = paymentsByOrder.get(o.id) ?? [];
+    return { ...o, payments: list, received: list.reduce((s, p) => s + Number(p.amount), 0) };
+  });
 
   return (
     <div className="content">
@@ -35,7 +41,7 @@ export default async function PedidosPage() {
           + Novo pedido
         </Link>
       </div>
-      <OrderTable orders={withReceived as unknown as Order[]} />
+      <OrderTable orders={withPayments as unknown as Order[]} />
     </div>
   );
 }
