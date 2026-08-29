@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { errorMessage } from "@/lib/errors";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const body = await request.json();
     const { supabase, organizationId } = await requireUser();
-    const update: any = {};
+    const update: Record<string, unknown> = {};
     if (typeof body.active === "boolean") update.active = body.active;
     if (typeof body.name === "string") update.name = body.name.trim();
     if (body.sale_price !== undefined) update.sale_price = Number(body.sale_price || 0);
@@ -21,8 +22,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .single();
     if (error) throw error;
     return NextResponse.json(data);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Erro ao atualizar produto." }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: errorMessage(e, "Erro ao atualizar produto.") }, { status: 500 });
   }
 }
 
@@ -37,7 +38,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
       .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Erro ao excluir produto." }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: errorMessage(e, "Erro ao excluir produto.") }, { status: 500 });
   }
 }

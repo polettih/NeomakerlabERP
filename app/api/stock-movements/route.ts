@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { errorMessage } from "@/lib/errors";
 export async function POST(req: Request) {
   try {
     const b = await req.json();
@@ -45,7 +46,7 @@ export async function POST(req: Request) {
       .eq("id", mat.id);
     if (ue) throw ue;
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Erro." }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: errorMessage(e, "Erro.") }, { status: 500 });
   }
 }

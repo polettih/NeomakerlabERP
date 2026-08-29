@@ -1,8 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { errorMessage } from "@/lib/errors";
+import type { Machine } from "@/lib/types";
 const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-export function MachineManager({ machines }: { machines: any[] }) {
+export function MachineManager({ machines }: { machines: Machine[] }) {
   const r = useRouter();
   const blank = {
     name: "",
@@ -14,9 +16,9 @@ export function MachineManager({ machines }: { machines: any[] }) {
     notes: "",
   };
   const [form, setForm] = useState(blank);
-  const [editing, setEditing] = useState<any | null>(null);
+  const [editing, setEditing] = useState<Machine | null>(null);
   const [error, setError] = useState("");
-  async function save(e: any) {
+  async function save(e: FormEvent) {
     e.preventDefault();
     setError("");
     try {
@@ -30,8 +32,8 @@ export function MachineManager({ machines }: { machines: any[] }) {
       setForm(blank);
       setEditing(null);
       r.refresh();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(errorMessage(e));
     }
   }
   async function disable(id: string) {
@@ -45,11 +47,11 @@ export function MachineManager({ machines }: { machines: any[] }) {
     if (!res.ok) setError(j.error || "Erro");
     else r.refresh();
   }
-  function edit(m: any) {
+  function edit(m: Machine) {
     setEditing(m);
     setForm({
       name: m.name,
-      category: m.category,
+      category: m.category || "Impressora FDM",
       power_kw: String(m.power_kw || 0),
       purchase_value: String(m.purchase_value || 0),
       useful_hours: String(m.useful_hours || 0),

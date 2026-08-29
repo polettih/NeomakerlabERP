@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { EXPENSE_CATEGORIES } from "@/lib/expense-categories";
+import { errorMessage } from "@/lib/errors";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -49,8 +50,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .single();
     if (error) throw error;
     return NextResponse.json(data);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Erro interno" }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: errorMessage(e, "Erro interno") }, { status: 500 });
   }
 }
 
@@ -65,7 +66,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
       .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Erro interno" }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: errorMessage(e, "Erro interno") }, { status: 500 });
   }
 }

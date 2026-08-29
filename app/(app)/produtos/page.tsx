@@ -48,7 +48,7 @@ export default async function ProdutosPage() {
         energyCostKwh={Number(settings?.energy_cost_kwh ?? 1.12)}
       />
       <ProductTable
-        products={(data ?? []) as any}
+        products={data ?? []}
         materials={materials ?? []}
         machines={machines ?? []}
         laborHourRate={Number(settings?.labor_hour_rate ?? 30)}

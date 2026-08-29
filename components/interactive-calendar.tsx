@@ -1,8 +1,9 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { Order } from "@/lib/types";
 const labels = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-const statusLabel: any = {
+const statusLabel: Record<string, string> = {
   new: "Novo",
   preparation: "Preparação",
   production: "Produção",
@@ -12,7 +13,7 @@ const statusLabel: any = {
   delivered: "Finalizado",
   cancelled: "Cancelado",
 };
-const statusClass: any = {
+const statusClass: Record<string, string> = {
   new: "cal-new",
   preparation: "cal-prep",
   production: "cal-production",
@@ -25,7 +26,7 @@ const statusClass: any = {
 function dateKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-export function InteractiveCalendar({ orders }: { orders: any[] }) {
+export function InteractiveCalendar({ orders }: { orders: Order[] }) {
   const [cursor, setCursor] = useState(() => new Date());
   const [selected, setSelected] = useState<string | null>(null);
   const r = useRouter();
@@ -41,7 +42,7 @@ export function InteractiveCalendar({ orders }: { orders: any[] }) {
     });
   }, [cursor]);
   const byDay = useMemo(() => {
-    const map: any = {};
+    const map: Record<string, Order[]> = {};
     orders.forEach((o) => {
       const eventDate =
         o.status === "delivered" && o.completed_at ? o.completed_at : o.expected_date;
@@ -51,7 +52,7 @@ export function InteractiveCalendar({ orders }: { orders: any[] }) {
     });
     return map;
   }, [orders]);
-  async function move(o: any, k: string) {
+  async function move(o: Order, k: string) {
     const sourceDate =
       o.status === "delivered" && o.completed_at ? o.completed_at : o.expected_date;
     if (!sourceDate) return;
@@ -119,7 +120,7 @@ export function InteractiveCalendar({ orders }: { orders: any[] }) {
             >
               <div className="calendar-day-number">{d.getDate()}</div>
               <div className="calendar-events">
-                {events.map((o: any) => (
+                {events.map((o: Order) => (
                   <div
                     key={o.id}
                     draggable
@@ -132,7 +133,7 @@ export function InteractiveCalendar({ orders }: { orders: any[] }) {
                   >
                     <strong>{o.customers?.name || "Pedido"}</strong>
                     <span>
-                      {o.order_items?.map((i: any) => i.product_name).join(", ") || "Sem produto"}
+                      {o.order_items?.map((i) => i.product_name).join(", ") || "Sem produto"}
                     </span>
                     <small>{statusLabel[o.status] || o.status}</small>
                   </div>
@@ -148,12 +149,12 @@ export function InteractiveCalendar({ orders }: { orders: any[] }) {
             <h3>Agenda de {new Date(selected + "T12:00:00").toLocaleDateString("pt-BR")}</h3>
             <p className="muted">{(byDay[selected] || []).length} compromisso(s) programado(s).</p>
           </div>
-          {(byDay[selected] || []).map((o: any) => (
+          {(byDay[selected] || []).map((o: Order) => (
             <div className="detail-event" key={o.id}>
               <div>
                 <strong>{o.customers?.name || "Pedido"}</strong>
                 <div className="muted">
-                  {o.order_items?.map((i: any) => `${i.product_name} × ${i.quantity}`).join(" • ")}
+                  {o.order_items?.map((i) => `${i.product_name} × ${i.quantity}`).join(" • ")}
                 </div>
               </div>
               <span className={`badge ${statusClass[o.status] || ""}`}>

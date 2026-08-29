@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { errorMessage } from "@/lib/errors";
 
 export async function GET() {
   try {
@@ -13,9 +14,9 @@ export async function GET() {
     if (error) throw error;
 
     return NextResponse.json({ labor_hour_rate: Number(data?.labor_hour_rate ?? 30) });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { error: e.message || "Erro ao carregar valor da hora." },
+      { error: errorMessage(e, "Erro ao carregar valor da hora.") },
       { status: 500 }
     );
   }
@@ -43,9 +44,9 @@ export async function POST(req: Request) {
     if (error) throw error;
 
     return NextResponse.json({ ok: true, labor_hour_rate: rate });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { error: e.message || "Erro ao salvar valor da hora." },
+      { error: errorMessage(e, "Erro ao salvar valor da hora.") },
       { status: 500 }
     );
   }

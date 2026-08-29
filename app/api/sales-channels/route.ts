@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { errorMessage } from "@/lib/errors";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
       throw error;
     }
     return NextResponse.json(data);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Erro ao criar canal." }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: errorMessage(e, "Erro ao criar canal.") }, { status: 500 });
   }
 }

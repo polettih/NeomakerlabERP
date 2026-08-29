@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { errorMessage } from "@/lib/errors";
 const valid = ["Impressora FDM", "Impressora Resina", "Maquinário"];
 export async function POST(req: Request) {
   try {
@@ -29,9 +30,9 @@ export async function POST(req: Request) {
       .single();
     if (error) throw error;
     return NextResponse.json(data);
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { error: e.message || "Erro ao cadastrar equipamento." },
+      { error: errorMessage(e, "Erro ao cadastrar equipamento.") },
       { status: 500 }
     );
   }
@@ -51,7 +52,7 @@ export async function PATCH(req: Request) {
     const purchase =
         b.purchase_value === undefined ? Number(c.purchase_value) : Number(b.purchase_value || 0),
       useful = b.useful_hours === undefined ? Number(c.useful_hours) : Number(b.useful_hours || 0);
-    const update: any = {};
+    const update: Record<string, unknown> = {};
     for (const k of [
       "name",
       "category",
@@ -76,9 +77,9 @@ export async function PATCH(req: Request) {
       .single();
     if (error) throw error;
     return NextResponse.json(data);
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { error: e.message || "Erro ao atualizar equipamento." },
+      { error: errorMessage(e, "Erro ao atualizar equipamento.") },
       { status: 500 }
     );
   }
@@ -95,9 +96,9 @@ export async function DELETE(req: Request) {
       .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { error: e.message || "Erro ao desativar equipamento." },
+      { error: errorMessage(e, "Erro ao desativar equipamento.") },
       { status: 500 }
     );
   }

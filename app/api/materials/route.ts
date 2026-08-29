@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { errorMessage } from "@/lib/errors";
 export async function POST(req: Request) {
   try {
     const b = await req.json();
@@ -33,8 +34,8 @@ export async function POST(req: Request) {
       .single();
     if (error) throw error;
     return NextResponse.json(data);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Erro." }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: errorMessage(e, "Erro.") }, { status: 500 });
   }
 }
 export async function PATCH(req: Request) {
@@ -49,7 +50,7 @@ export async function PATCH(req: Request) {
       .eq("organization_id", organizationId)
       .single();
     if (ce) throw ce;
-    const update: any = {};
+    const update: Record<string, unknown> = {};
     for (const k of [
       "name",
       "category",
@@ -88,8 +89,8 @@ export async function PATCH(req: Request) {
       .single();
     if (error) throw error;
     return NextResponse.json(data);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Erro." }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: errorMessage(e, "Erro.") }, { status: 500 });
   }
 }
 export async function DELETE(req: Request) {
@@ -104,7 +105,7 @@ export async function DELETE(req: Request) {
       .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Erro ao excluir material." }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: errorMessage(e, "Erro ao excluir material.") }, { status: 500 });
   }
 }

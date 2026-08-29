@@ -1,7 +1,8 @@
 "use client";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-export function RecipeTemplateButton({ template }: { template: any }) {
+import type { PaintingRecipeTemplate } from "@/lib/types";
+export function RecipeTemplateButton({ template }: { template: PaintingRecipeTemplate }) {
   const r = useRouter();
   const [busy, setBusy] = useState(false);
   async function add() {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { errorMessage } from "@/lib/errors";
 export async function GET(req: Request) {
   try {
     const { supabase } = await requireUser();
@@ -12,9 +13,9 @@ export async function GET(req: Request) {
       .maybeSingle();
     if (error) throw error;
     return NextResponse.json(data ?? null);
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { error: e.message || "Erro ao carregar precificação." },
+      { error: errorMessage(e, "Erro ao carregar precificação.") },
       { status: 500 }
     );
   }
@@ -44,9 +45,9 @@ export async function POST(req: Request) {
       .eq("id", product_id);
     if (pe) throw pe;
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json(
-      { error: e.message || "Erro ao salvar precificação." },
+      { error: errorMessage(e, "Erro ao salvar precificação.") },
       { status: 500 }
     );
   }

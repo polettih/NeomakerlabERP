@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { errorMessage } from "@/lib/errors";
 export async function POST(request: Request) {
   try {
     const { supabase, organizationId } = await requireUser();
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
       .single();
     if (error) throw error;
     return NextResponse.json(data);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Erro interno" }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: errorMessage(e, "Erro interno") }, { status: 500 });
   }
 }

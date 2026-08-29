@@ -17,7 +17,7 @@ export default async function ClientesPage() {
       </div>
       <div className="grid" style={{ gridTemplateColumns: "1fr 2fr" }}>
         <CreateCustomerForm />
-        <CustomerManager customers={(data ?? []) as any} />
+        <CustomerManager customers={data ?? []} />
       </div>
     </div>
   );

@@ -1,4 +1,13 @@
 import { requireUser } from "@/lib/auth";
+
+type ProductionOrder = {
+  id: string;
+  status: string;
+  priority: number;
+  created_at: string;
+  orders: { id: string; total: unknown; status: string } | null;
+};
+
 export default async function ProducaoPage() {
   const { supabase } = await requireUser();
   const { data } = await supabase
@@ -6,6 +15,7 @@ export default async function ProducaoPage() {
     .select("id,status,priority,created_at,orders(id,total,status)")
     .order("priority", { ascending: false })
     .order("created_at", { ascending: true });
+  const rows = (data ?? []) as unknown as ProductionOrder[];
   return (
     <div className="content">
       <div className="section-title">
@@ -25,9 +35,9 @@ export default async function ProducaoPage() {
                   : "Concluído"}
             </h2>
             <div className="grid" style={{ marginTop: 14 }}>
-              {(data ?? [])
-                .filter((x: any) => x.status === status)
-                .map((x: any) => (
+              {rows
+                .filter((x) => x.status === status)
+                .map((x) => (
                   <div className="card" key={x.id} style={{ background: "#0f1318" }}>
                     <strong>Pedido {x.orders?.id?.slice(0, 8)}</strong>
                     <p className="muted">Prioridade {x.priority}</p>

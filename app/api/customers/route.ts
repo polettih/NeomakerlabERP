@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { errorMessage } from "@/lib/errors";
 export async function POST(request: Request) {
   try {
     const b = await request.json();
@@ -18,8 +19,8 @@ export async function POST(request: Request) {
       .single();
     if (error) throw error;
     return NextResponse.json(data);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: errorMessage(e) }, { status: 500 });
   }
 }
 export async function PUT(request: Request) {
@@ -39,8 +40,8 @@ export async function PUT(request: Request) {
       .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: errorMessage(e) }, { status: 500 });
   }
 }
 export async function DELETE(request: Request) {
@@ -54,7 +55,7 @@ export async function DELETE(request: Request) {
       .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: errorMessage(e) }, { status: 500 });
   }
 }

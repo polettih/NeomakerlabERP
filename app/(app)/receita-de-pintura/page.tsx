@@ -1,6 +1,18 @@
 import { requireUser } from "@/lib/auth";
 import { CreatePaintingRecipeForm } from "@/components/create-painting-recipe-form";
 import { RecipeTemplateButton } from "@/components/recipe-template-button";
+
+type RecipeImage = { public_url: string; sort_order: number };
+type Recipe = {
+  id: string;
+  name: string;
+  category: string | null;
+  description: string | null;
+  colors: string[] | null;
+  finish: string | null;
+  products: { name: string; product_images: RecipeImage[] | null } | null;
+};
+const bySortOrder = (a: RecipeImage, b: RecipeImage) => a.sort_order - b.sort_order;
 export default async function ReceitaPinturaPage() {
   const { supabase } = await requireUser();
   const [{ data: recipes }, { data: templates }, { data: products }] = await Promise.all([
@@ -80,7 +92,7 @@ export default async function ReceitaPinturaPage() {
               </tr>
             </thead>
             <tbody>
-              {(recipes ?? []).map((x: any) => (
+              {((recipes ?? []) as unknown as Recipe[]).map((x) => (
                 <tr key={x.id}>
                   <td>
                     <strong>{x.name}</strong>
@@ -89,15 +101,11 @@ export default async function ReceitaPinturaPage() {
                   <td>{x.category}</td>
                   <td>
                     <div className="product-name-cell">
-                      {x.products?.product_images?.sort(
-                        (a: any, b: any) => a.sort_order - b.sort_order
-                      )?.[0]?.public_url ? (
+                      {x.products?.product_images?.slice().sort(bySortOrder)?.[0]?.public_url ? (
                         <img
                           className="product-thumb"
                           src={
-                            x.products.product_images.sort(
-                              (a: any, b: any) => a.sort_order - b.sort_order
-                            )[0].public_url
+                            x.products.product_images.slice().sort(bySortOrder)[0].public_url
                           }
                           alt=""
                         />

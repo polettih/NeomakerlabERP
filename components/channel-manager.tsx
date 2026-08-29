@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 type Channel = {
   id: string;
   name: string;
@@ -39,7 +38,7 @@ export function ChannelManager({ channels }: { channels: Channel[] }) {
       r.refresh();
     }
   }
-  async function update(id: string, body: any) {
+  async function update(id: string, body: Partial<Pick<Channel, "name" | "active" | "fee_percent" | "fixed_fee">>) {
     setBusy(true);
     setError("");
     const res = await fetch(`/api/sales-channels/${id}`, {
