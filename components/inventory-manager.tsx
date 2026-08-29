@@ -43,6 +43,7 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
     material_id: materials[0]?.id || "",
     quantity: "",
     description: "",
+    direction: "out" as "out" | "in",
   });
   const [filter, setFilter] = useState("Todos");
   const [q, setQ] = useState("");
@@ -137,10 +138,14 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
     e.preventDefault();
     setError("");
     try {
+      const qty = Math.abs(Number(use.quantity));
       await send("/api/stock-movements", "POST", {
-        ...use,
-        quantity: -Math.abs(Number(use.quantity)),
-        movement_type: "manual_consumption",
+        material_id: use.material_id,
+        description: use.description,
+        quantity: use.direction === "out" ? -qty : qty,
+        // "adjustment" não mexe no custo médio, diferente de uma compra — correto
+        // para corrigir contagem de estoque sem distorcer o custo dos materiais.
+        movement_type: use.direction === "out" ? "manual_consumption" : "adjustment",
       });
       setUse({ ...use, quantity: "", description: "" });
       r.refresh();
@@ -347,7 +352,25 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
             </button>
           </form>
           <form className="card grid" onSubmit={consume}>
-            <h2>➖ Consumo / ajuste</h2>
+            <div className="section-title">
+              <h2>{use.direction === "out" ? "➖ Consumo" : "➕ Ajuste de estoque"}</h2>
+              <div className="actions">
+                <button
+                  type="button"
+                  className={`btn btn-sm ${use.direction === "out" ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setUse({ ...use, direction: "out" })}
+                >
+                  Baixar
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${use.direction === "in" ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setUse({ ...use, direction: "in" })}
+                >
+                  Adicionar
+                </button>
+              </div>
+            </div>
             <div className="field">
               <label>Material</label>
               <select
@@ -365,7 +388,7 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
               </select>
             </div>
             <div className="field">
-              <label>Quantidade consumida</label>
+              <label>{use.direction === "out" ? "Quantidade consumida" : "Quantidade a adicionar"}</label>
               <input
                 className="input"
                 type="number"
@@ -382,11 +405,15 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
                 className="input"
                 value={use.description}
                 onChange={(e) => setUse({ ...use, description: e.target.value })}
-                placeholder="Teste, impressão perdida, manutenção..."
+                placeholder={
+                  use.direction === "out"
+                    ? "Teste, impressão perdida, manutenção..."
+                    : "Contagem de inventário, devolução, correção..."
+                }
               />
             </div>
             <button className="btn btn-secondary" disabled={!materials.length}>
-              Baixar material
+              {use.direction === "out" ? "Baixar material" : "Adicionar ao estoque"}
             </button>
           </form>
         </div>
