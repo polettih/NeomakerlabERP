@@ -34,12 +34,18 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
         const orderTotal = Number(order.gross_total ?? order.total);
         const nextStatus = received <= 0 ? "pending" : received >= orderTotal ? "paid" : "partial";
         if (nextStatus !== order.payment_status) {
-          await supabase.from("orders").update({ payment_status: nextStatus }).eq("id", payment.order_id);
+          await supabase
+            .from("orders")
+            .update({ payment_status: nextStatus })
+            .eq("id", payment.order_id);
         }
       }
     }
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ error: errorMessage(e, "Erro ao excluir pagamento.") }, { status: 500 });
+    return NextResponse.json(
+      { error: errorMessage(e, "Erro ao excluir pagamento.") },
+      { status: 500 }
+    );
   }
 }

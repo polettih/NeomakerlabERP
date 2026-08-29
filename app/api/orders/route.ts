@@ -5,21 +5,16 @@ import { errorMessage } from "@/lib/errors";
 type OrderItemInput = { product_id: string; quantity?: number };
 
 export async function POST(request: Request) {
-  const { supabase } = await requireUser();
+  const { supabase, organizationId } = await requireUser();
   try {
     const body = await request.json();
     if (!body.items?.length)
       return NextResponse.json({ error: "Adicione pelo menos um produto." }, { status: 400 });
-    const { data: member } = await supabase
-      .from("organization_members")
-      .select("organization_id")
-      .limit(1)
-      .single();
-    if (!member) throw new Error("Organização não encontrada.");
     const ids = (body.items as OrderItemInput[]).map((i) => i.product_id);
     const { data: products, error: pe } = await supabase
       .from("products")
       .select("id,name,sale_price,estimated_cost")
+      .eq("organization_id", organizationId)
       .in("id", ids);
     if (pe) throw pe;
     const items = (body.items as OrderItemInput[]).map((i) => {
@@ -47,6 +42,7 @@ export async function POST(request: Request) {
         .from("sales_channels")
         .select("fee_percent,fixed_fee,active")
         .eq("id", body.sales_channel_id)
+        .eq("organization_id", organizationId)
         .single();
       if (ce) throw ce;
       if (!channel?.active) throw new Error("O canal selecionado está inativo.");
@@ -73,7 +69,7 @@ export async function POST(request: Request) {
     const { data: order, error: oe } = await supabase
       .from("orders")
       .insert({
-        organization_id: member.organization_id,
+        organization_id: organizationId,
         customer_id: body.customer_id || null,
         sales_channel_id: body.sales_channel_id || null,
         status,
@@ -110,17 +106,15 @@ export async function POST(request: Request) {
           : status === "production"
             ? "in_progress"
             : "pending";
-    const { error: pr } = await supabase
-      .from("production_orders")
-      .insert({
-        organization_id: member.organization_id,
-        order_id: order.id,
-        status: productionStatus,
-        started_at: status === "production" ? new Date().toISOString() : null,
-        completed_at: ["shipped", "delivered", "cancelled"].includes(status)
-          ? completedAt || new Date().toISOString()
-          : null,
-      });
+    const { error: pr } = await supabase.from("production_orders").insert({
+      organization_id: organizationId,
+      order_id: order.id,
+      status: productionStatus,
+      started_at: status === "production" ? new Date().toISOString() : null,
+      completed_at: ["shipped", "delivered", "cancelled"].includes(status)
+        ? completedAt || new Date().toISOString()
+        : null,
+    });
     if (pr) throw pr;
     return NextResponse.json(order);
   } catch (e) {

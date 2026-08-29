@@ -2,20 +2,14 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 export async function POST(request: Request) {
   try {
-    const { supabase } = await requireUser();
+    const { supabase, organizationId } = await requireUser();
     const body = await request.json();
     if (!body.name?.trim())
       return NextResponse.json({ error: "Nome da receita é obrigatório." }, { status: 400 });
-    const { data: member } = await supabase
-      .from("organization_members")
-      .select("organization_id")
-      .limit(1)
-      .single();
-    if (!member) throw new Error("Organização não encontrada.");
     const { data, error } = await supabase
       .from("painting_recipes")
       .insert({
-        organization_id: member.organization_id,
+        organization_id: organizationId,
         name: body.name.trim(),
         category: body.category || "Geral",
         description: body.description || null,
@@ -35,10 +29,14 @@ export async function POST(request: Request) {
 }
 export async function DELETE(request: Request) {
   try {
-    const { supabase } = await requireUser();
+    const { supabase, organizationId } = await requireUser();
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID obrigatório." }, { status: 400 });
-    const { error } = await supabase.from("painting_recipes").delete().eq("id", id);
+    const { error } = await supabase
+      .from("painting_recipes")
+      .delete()
+      .eq("id", id)
+      .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (e: any) {

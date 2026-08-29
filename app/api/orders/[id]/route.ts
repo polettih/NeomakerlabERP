@@ -17,11 +17,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const body = await request.json();
-    const { supabase } = await requireUser();
+    const { supabase, organizationId } = await requireUser();
     const { data: old, error: oe } = await supabase
       .from("orders")
       .select("id,status,expected_date,completed_at")
       .eq("id", id)
+      .eq("organization_id", organizationId)
       .single();
     if (oe) throw oe;
     const update: Record<string, unknown> = {};
@@ -46,6 +47,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .from("orders")
       .update(update)
       .eq("id", id)
+      .eq("organization_id", organizationId)
       .select()
       .single();
     if (error) throw error;
@@ -53,14 +55,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      const { error: he } = await supabase
-        .from("order_status_history")
-        .insert({
-          order_id: id,
-          old_status: old.status,
-          new_status: body.status,
-          changed_by: user?.id || null,
-        });
+      const { error: he } = await supabase.from("order_status_history").insert({
+        order_id: id,
+        old_status: old.status,
+        new_status: body.status,
+        changed_by: user?.id || null,
+      });
       if (he) throw he;
       if (body.status === "production") {
         const { error: pe } = await supabase
@@ -80,7 +80,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     return NextResponse.json(data);
   } catch (e) {
-    return NextResponse.json({ error: errorMessage(e, "Erro ao atualizar pedido.") }, { status: 500 });
+    return NextResponse.json(
+      { error: errorMessage(e, "Erro ao atualizar pedido.") },
+      { status: 500 }
+    );
   }
 }
 

@@ -28,18 +28,16 @@ export async function POST(req: Request) {
     if (me) throw me;
     if (qty < 0 && Number(mat.quantity_on_hand) < Math.abs(qty))
       return NextResponse.json({ error: `Estoque insuficiente de ${mat.name}.` }, { status: 400 });
-    const { error } = await supabase
-      .from("stock_movements")
-      .insert({
-        organization_id: mat.organization_id,
-        material_id: mat.id,
-        movement_type: b.movement_type || "manual_consumption",
-        quantity: qty,
-        unit_cost: Number(b.unit_cost ?? mat.average_cost),
-        product_id: b.product_id || null,
-        order_id: b.order_id || null,
-        description: b.description || "Lançamento manual",
-      });
+    const { error } = await supabase.from("stock_movements").insert({
+      organization_id: mat.organization_id,
+      material_id: mat.id,
+      movement_type: b.movement_type || "manual_consumption",
+      quantity: qty,
+      unit_cost: Number(b.unit_cost ?? mat.average_cost),
+      product_id: b.product_id || null,
+      order_id: b.order_id || null,
+      description: b.description || "Lançamento manual",
+    });
     if (error) throw error;
     const { error: ue } = await supabase
       .from("materials")

@@ -5,7 +5,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const { id } = await params;
     const body = await request.json();
-    const { supabase } = await requireUser();
+    const { supabase, organizationId } = await requireUser();
     const update: any = {};
     if (typeof body.active === "boolean") update.active = body.active;
     if (typeof body.name === "string") update.name = body.name.trim();
@@ -16,6 +16,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       .from("products")
       .update(update)
       .eq("id", id)
+      .eq("organization_id", organizationId)
       .select()
       .single();
     if (error) throw error;
@@ -28,8 +29,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { supabase } = await requireUser();
-    const { error } = await supabase.from("products").delete().eq("id", id);
+    const { supabase, organizationId } = await requireUser();
+    const { error } = await supabase
+      .from("products")
+      .delete()
+      .eq("id", id)
+      .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (e: any) {

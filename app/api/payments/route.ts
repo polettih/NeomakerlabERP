@@ -2,7 +2,15 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { errorMessage } from "@/lib/errors";
 
-const PAYMENT_METHODS = ["pix", "cash", "credit_card", "debit_card", "bank_transfer", "marketplace", "other"];
+const PAYMENT_METHODS = [
+  "pix",
+  "cash",
+  "credit_card",
+  "debit_card",
+  "bank_transfer",
+  "marketplace",
+  "other",
+];
 
 export async function POST(request: Request) {
   try {
@@ -46,13 +54,19 @@ export async function POST(request: Request) {
         const orderTotal = Number(order.gross_total ?? order.total);
         const nextStatus = received <= 0 ? "pending" : received >= orderTotal ? "paid" : "partial";
         if (nextStatus !== order.payment_status) {
-          await supabase.from("orders").update({ payment_status: nextStatus }).eq("id", body.order_id);
+          await supabase
+            .from("orders")
+            .update({ payment_status: nextStatus })
+            .eq("id", body.order_id);
         }
       }
     }
 
     return NextResponse.json(payment);
   } catch (e) {
-    return NextResponse.json({ error: errorMessage(e, "Erro ao registrar pagamento.") }, { status: 500 });
+    return NextResponse.json(
+      { error: errorMessage(e, "Erro ao registrar pagamento.") },
+      { status: 500 }
+    );
   }
 }

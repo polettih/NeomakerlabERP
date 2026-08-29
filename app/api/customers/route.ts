@@ -3,17 +3,11 @@ import { requireUser } from "@/lib/auth";
 export async function POST(request: Request) {
   try {
     const b = await request.json();
-    const { supabase } = await requireUser();
-    const { data: m } = await supabase
-      .from("organization_members")
-      .select("organization_id")
-      .limit(1)
-      .single();
-    if (!m) throw new Error("Organização não encontrada.");
+    const { supabase, organizationId } = await requireUser();
     const { data, error } = await supabase
       .from("customers")
       .insert({
-        organization_id: m.organization_id,
+        organization_id: organizationId,
         name: b.name,
         email: b.email || null,
         phone: b.phone || null,
@@ -31,7 +25,7 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const b = await request.json();
-    const { supabase } = await requireUser();
+    const { supabase, organizationId } = await requireUser();
     const { error } = await supabase
       .from("customers")
       .update({
@@ -41,7 +35,8 @@ export async function PUT(request: Request) {
         behavior: b.behavior,
         notes: b.notes || null,
       })
-      .eq("id", b.id);
+      .eq("id", b.id)
+      .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (e: any) {
@@ -51,8 +46,12 @@ export async function PUT(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const id = new URL(request.url).searchParams.get("id");
-    const { supabase } = await requireUser();
-    const { error } = await supabase.from("customers").delete().eq("id", id);
+    const { supabase, organizationId } = await requireUser();
+    const { error } = await supabase
+      .from("customers")
+      .delete()
+      .eq("id", id)
+      .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (e: any) {
