@@ -319,7 +319,11 @@ export function CreateProductForm({ materials, machines, laborHourRate, energyCo
               Cancelar
             </button>
           </div>
-          {error && <div className="error">{error}</div>}
+          {error && (
+            <div className="error" role="alert">
+              {error}
+            </div>
+          )}
           <FormTabs
             defaultTab="dados"
             sections={[

@@ -39,7 +39,6 @@ export async function POST(req: Request) {
     const { error: pe } = await supabase
       .from("products")
       .update({
-        sale_price: Number(b.suggested_price || 0),
         estimated_cost: Number(b.total_cost || 0),
       })
       .eq("id", product_id);
