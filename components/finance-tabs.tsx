@@ -1,7 +1,7 @@
 "use client";
-import { useId, useState } from "react";
+import { useState } from "react";
+import Link from "next/link";
 import { money } from "@/lib/format";
-import { errorMessage } from "@/lib/errors";
 import type { FinanceCategoryRow } from "@/lib/types";
 export function FinanceTabs({
   summary,
@@ -18,36 +18,8 @@ export function FinanceTabs({
   spent: number;
   initialLaborHourRate: number;
 }) {
-  const laborRateInputId = useId();
   const [tab, setTab] = useState<"sales" | "fees" | "labor">("sales");
-  const [rate, setRate] = useState(String(initialLaborHourRate));
-  const [savedRate, setSavedRate] = useState(initialLaborHourRate);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  async function saveRate() {
-    const value = Number(rate);
-    if (!Number.isFinite(value) || value < 0) {
-      setError("Informe um valor de hora válido.");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    try {
-      const res = await fetch("/api/labor-rate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ labor_hour_rate: value }),
-      });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error || "Erro ao salvar.");
-      setSavedRate(value);
-      setRate(String(value));
-    } catch (e) {
-      setError(errorMessage(e, "Erro ao salvar valor da hora."));
-    } finally {
-      setBusy(false);
-    }
-  }
+  const savedRate = initialLaborHourRate;
   return (
     <>
       <div className="tabs" style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
@@ -184,31 +156,11 @@ export function FinanceTabs({
           <div className="card">
             <h2>🛠️ Valor da mão de obra</h2>
             <p className="muted">
-              Defina quanto você cobra por hora. Esse valor será usado automaticamente na
-              precificação dos produtos.
+              Usado automaticamente na precificação dos produtos e no cálculo de lucro.
             </p>
-            <div className="field">
-              <label htmlFor={laborRateInputId}>Valor cobrado por hora</label>
-              <input
-                id={laborRateInputId}
-                className="input"
-                type="number"
-                min="0"
-                step="0.01"
-                value={rate}
-                onChange={(e) => setRate(e.target.value)}
-              />
-            </div>
-            <button className="btn btn-primary" disabled={busy} onClick={saveRate}>
-              {busy ? "Salvando..." : "Salvar valor da hora"}
-            </button>
-            {error && (
-              <div className="error" role="alert" style={{ marginTop: 12 }}>
-                {error}
-              </div>
-            )}
-            <p className="muted" style={{ marginTop: 12 }}>
-              Valor atual salvo: <strong>{money(savedRate)}</strong>/hora
+            <p className="muted">
+              Valor atual: <strong>{money(savedRate)}</strong>/hora.{" "}
+              <Link href="/configuracoes">Editar em Configurações →</Link>
             </p>
           </div>
           <div className="grid cards">
