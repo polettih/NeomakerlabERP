@@ -21,7 +21,7 @@ export async function POST(request: Request) {
       .single();
     if (error) throw error;
     return NextResponse.json(data);
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e, "Erro interno") }, { status: 500 });
   }
 }

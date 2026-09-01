@@ -2,6 +2,18 @@ import { requireUser } from "@/lib/auth";
 import { CreateProductForm } from "@/components/create-product-form";
 import { ProductTable } from "@/components/product-table";
 
+type ProductRow = {
+  id: string;
+  name: string;
+  sku: string | null;
+  sale_price: number;
+  estimated_cost: number;
+  active: boolean;
+  category: string | null;
+  created_at: string;
+  product_images: { id: string; public_url: string; storage_path: string; sort_order: number }[] | null;
+};
+
 export default async function ProdutosPage() {
   const { supabase, organizationId } = await requireUser();
   const [{ data }, { data: materials }, { data: machines }, { data: settings }] = await Promise.all(
@@ -48,7 +60,7 @@ export default async function ProdutosPage() {
         energyCostKwh={Number(settings?.energy_cost_kwh ?? 1.12)}
       />
       <ProductTable
-        products={data ?? []}
+        products={(data ?? []) as ProductRow[]}
         materials={materials ?? []}
         machines={machines ?? []}
         laborHourRate={Number(settings?.labor_hour_rate ?? 30)}

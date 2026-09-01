@@ -12,7 +12,7 @@ export async function GET(req: Request) {
       .eq("product_id", productId);
     if (error) throw error;
     return NextResponse.json(data ?? []);
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e, "Erro.") }, { status: 500 });
   }
 }
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
       .single();
     if (error) throw error;
     return NextResponse.json(data);
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e, "Erro.") }, { status: 500 });
   }
 }
@@ -47,7 +47,7 @@ export async function DELETE(req: Request) {
     const { error } = await supabase.from("product_materials").delete().eq("id", b.id);
     if (error) throw error;
     return NextResponse.json({ ok: true });
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e, "Erro.") }, { status: 500 });
   }
 }

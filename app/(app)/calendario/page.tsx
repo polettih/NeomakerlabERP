@@ -1,6 +1,5 @@
 import { requireUser } from "@/lib/auth";
 import { InteractiveCalendar } from "@/components/interactive-calendar";
-import type { Order } from "@/lib/types";
 export default async function CalendarioPage() {
   const { supabase } = await requireUser();
   const { data: orders } = await supabase
@@ -10,10 +9,6 @@ export default async function CalendarioPage() {
     )
     .or("expected_date.not.is.null,completed_at.not.is.null")
     .order("order_date");
-  // O cliente Supabase (sem tipos gerados do schema) infere relações de FK como
-  // array; em tempo de execução, customers/sales_channels vêm como objeto único
-  // (customer_id é N:1). O tipo Order reflete o formato real dos dados.
-  const rows = (orders ?? []) as unknown as Order[];
   return (
     <div className="content">
       <div className="section-title">
@@ -24,7 +19,7 @@ export default async function CalendarioPage() {
           </p>
         </div>
       </div>
-      <InteractiveCalendar orders={rows} />
+      <InteractiveCalendar orders={orders ?? []} />
     </div>
   );
 }

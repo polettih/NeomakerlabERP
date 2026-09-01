@@ -26,7 +26,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       throw error;
     }
     return NextResponse.json(data);
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e, "Erro ao atualizar canal.") }, { status: 500 });
   }
 }
@@ -41,7 +41,7 @@ export async function DELETE(_r: Request, { params }: { params: Promise<{ id: st
       .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json(
       { error: errorMessage(e, "Não foi possível excluir o canal.") },
       { status: 500 }

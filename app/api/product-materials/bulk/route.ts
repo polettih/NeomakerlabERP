@@ -13,7 +13,7 @@ export async function DELETE(req: Request) {
       .eq("product_id", b.product_id);
     if (error) throw error;
     return NextResponse.json({ ok: true });
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e, "Erro.") }, { status: 500 });
   }
 }

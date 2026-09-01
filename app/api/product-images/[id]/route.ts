@@ -21,7 +21,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
       .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e, "Erro ao remover foto.") }, { status: 500 });
   }
 }

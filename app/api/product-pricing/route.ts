@@ -13,7 +13,7 @@ export async function GET(req: Request) {
       .maybeSingle();
     if (error) throw error;
     return NextResponse.json(data ?? null);
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json(
       { error: errorMessage(e, "Erro ao carregar precificação.") },
       { status: 500 }
@@ -39,12 +39,13 @@ export async function POST(req: Request) {
     const { error: pe } = await supabase
       .from("products")
       .update({
+        sale_price: Number(b.suggested_price || 0),
         estimated_cost: Number(b.total_cost || 0),
       })
       .eq("id", product_id);
     if (pe) throw pe;
     return NextResponse.json({ ok: true });
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json(
       { error: errorMessage(e, "Erro ao salvar precificação.") },
       { status: 500 }

@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { CreateCustomerForm } from "@/components/create-customer-form";
-import { CustomerManager } from "@/components/customer-manager";
+import { CustomerManager, type Customer } from "@/components/customer-manager";
 export default async function ClientesPage() {
   const { supabase } = await requireUser();
   const { data } = await supabase
@@ -17,7 +17,7 @@ export default async function ClientesPage() {
       </div>
       <div className="grid" style={{ gridTemplateColumns: "1fr 2fr" }}>
         <CreateCustomerForm />
-        <CustomerManager customers={data ?? []} />
+        <CustomerManager customers={(data ?? []) as Customer[]} />
       </div>
     </div>
   );

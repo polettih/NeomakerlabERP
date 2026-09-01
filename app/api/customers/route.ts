@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       .single();
     if (error) throw error;
     return NextResponse.json(data);
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e) }, { status: 500 });
   }
 }
@@ -40,7 +40,7 @@ export async function PUT(request: Request) {
       .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e) }, { status: 500 });
   }
 }
@@ -55,7 +55,7 @@ export async function DELETE(request: Request) {
       .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e) }, { status: 500 });
   }
 }

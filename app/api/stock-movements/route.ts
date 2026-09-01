@@ -46,7 +46,7 @@ export async function POST(req: Request) {
       .eq("id", mat.id);
     if (ue) throw ue;
     return NextResponse.json({ ok: true });
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e, "Erro.") }, { status: 500 });
   }
 }

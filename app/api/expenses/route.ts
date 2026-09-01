@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
-import { EXPENSE_CATEGORIES } from "@/lib/expense-categories";
 import { errorMessage } from "@/lib/errors";
+import { EXPENSE_CATEGORIES } from "@/lib/expense-categories";
 
 export async function POST(request: Request) {
   try {
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       .single();
     if (error) throw error;
     return NextResponse.json(data);
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e, "Erro interno") }, { status: 500 });
   }
 }

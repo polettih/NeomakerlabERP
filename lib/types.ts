@@ -86,40 +86,46 @@ export type ProductMaterialLink = {
 
 export type ProductPricing = Record<string, unknown> & { product_id?: string };
 
-export type PaintingRecipeTemplate = {
-  id?: string;
-  name: string;
-  category: string | null;
-  description: string | null;
-  colors: string[] | null;
-  dilution: string | null;
-  finish: string | null;
-  notes: string | null;
-};
-
-export type Order = {
-  id: string;
-  status: string;
-  payment_status?: string | null;
-  total?: unknown;
-  gross_total?: unknown;
-  order_date?: string | null;
-  expected_date?: string | null;
-  completed_at?: string | null;
-  customers?: { name: string } | null;
-  sales_channels?: { name: string } | null;
-  order_items?: { product_name: string; quantity: unknown }[] | null;
-};
-
 export type Machine = {
   id: string;
   name: string;
-  category?: string | null;
+  category: string;
   power_kw?: unknown;
   purchase_value?: unknown;
-  purchase_date?: string | null;
   useful_hours?: unknown;
   depreciation_per_hour?: unknown;
+  active: boolean;
+  purchase_date?: string | null;
   notes?: string | null;
-  active?: boolean;
+};
+
+export type Customer = {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  behavior?: string | null;
+  notes?: string | null;
+};
+
+export type PaintingRecipe = {
+  id: string;
+  name: string;
+  category: string;
+  description?: string | null;
+  colors: string[];
+  dilution?: string | null;
+  finish?: string | null;
+  notes?: string | null;
+  product_id?: string | null;
+};
+
+export type OrderItemSummary = { product_name: string; quantity: unknown };
+export type OrderSummary = {
+  id: string;
+  status: string;
+  order_date?: string | null;
+  expected_date?: string | null;
+  customers?: { name: string } | { name: string }[] | null;
+  order_items?: OrderItemSummary[];
 };

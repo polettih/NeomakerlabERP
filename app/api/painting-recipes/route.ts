@@ -19,12 +19,13 @@ export async function POST(request: Request) {
         finish: body.finish || null,
         notes: body.notes || null,
         product_id: body.product_id || null,
+        steps: Array.isArray(body.steps) ? body.steps : [],
       })
       .select()
       .single();
     if (error) throw error;
     return NextResponse.json(data);
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e, "Erro interno") }, { status: 500 });
   }
 }
@@ -40,7 +41,7 @@ export async function DELETE(request: Request) {
       .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e, "Erro interno") }, { status: 500 });
   }
 }

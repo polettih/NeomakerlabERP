@@ -14,7 +14,7 @@ export async function GET() {
     if (error) throw error;
 
     return NextResponse.json({ labor_hour_rate: Number(data?.labor_hour_rate ?? 30) });
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json(
       { error: errorMessage(e, "Erro ao carregar valor da hora.") },
       { status: 500 }
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     if (error) throw error;
 
     return NextResponse.json({ ok: true, labor_hour_rate: rate });
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json(
       { error: errorMessage(e, "Erro ao salvar valor da hora.") },
       { status: 500 }

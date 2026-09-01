@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       throw error;
     }
     return NextResponse.json(data);
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e, "Erro ao criar canal.") }, { status: 500 });
   }
 }

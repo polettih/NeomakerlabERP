@@ -91,3 +91,69 @@ th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04
 .material-block:last-child {
   margin-bottom: 0;
 }
+
+/* Editor de passos no formulário de nova receita */
+.recipe-steps-editor {
+  display: grid;
+  gap: 8px;
+}
+.recipe-step-row {
+  display: grid;
+  grid-template-columns: 24px 130px 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.recipe-step-num {
+  color: var(--muted);
+  font-weight: 700;
+  text-align: center;
+}
+.recipe-step-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* Grade de cards da biblioteca de receitas */
+.recipe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+.recipe-card {
+  padding: 16px;
+}
+.recipe-step-list {
+  list-style: none;
+  margin: 10px 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.recipe-step-list li label {
+  align-items: flex-start;
+}
+.recipe-step-list li.recipe-step-done span {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.recipe-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.recipe-card-details {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 6px;
+}
+
+@media (max-width: 720px) {
+  .recipe-step-row {
+    grid-template-columns: 1fr;
+  }
+}

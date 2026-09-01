@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       .single();
     if (error) throw error;
     return NextResponse.json(data);
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e, "Erro.") }, { status: 500 });
   }
 }
@@ -89,7 +89,7 @@ export async function PATCH(req: Request) {
       .single();
     if (error) throw error;
     return NextResponse.json(data);
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e, "Erro.") }, { status: 500 });
   }
 }
@@ -105,7 +105,7 @@ export async function DELETE(req: Request) {
       .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e, "Erro ao excluir material.") }, { status: 500 });
   }
 }

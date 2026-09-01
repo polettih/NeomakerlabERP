@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     });
     if (error) throw error;
     return NextResponse.json({ ok: true });
-  } catch (e: unknown) {
+  } catch (e) {
     return NextResponse.json({ error: errorMessage(e, "Erro ao registrar compra.") }, { status: 500 });
   }
 }
