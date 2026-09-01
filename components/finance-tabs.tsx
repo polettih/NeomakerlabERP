@@ -27,7 +27,7 @@ export function FinanceTabs({
           className={`btn ${tab === "sales" ? "btn-primary" : "btn-secondary"}`}
           onClick={() => setTab("sales")}
         >
-          💰 Venda bruta
+          💰 Vendas
         </button>
         <button
           className={`btn ${tab === "fees" ? "btn-primary" : "btn-secondary"}`}
