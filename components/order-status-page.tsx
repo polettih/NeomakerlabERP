@@ -1,8 +1,17 @@
 import { requireUser } from "@/lib/auth";
 import Link from "next/link";
 import { OrderStatusActions } from "@/components/order-status-actions";
-import type { Order } from "@/lib/types";
 const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+type OrderRow = {
+  id: string;
+  status: string;
+  total: number;
+  order_date: string;
+  customers: { name: string }[] | null;
+  sales_channels: { name: string }[] | null;
+};
+
 export async function OrderStatusPage({
   title,
   subtitle,
@@ -20,9 +29,6 @@ export async function OrderStatusPage({
     )
     .in("status", statuses)
     .order("order_date", { ascending: false });
-  // Ver nota em app/(app)/calendario/page.tsx sobre a inferência de relações do
-  // cliente Supabase sem tipos gerados do schema.
-  const rows = (data ?? []) as unknown as Order[];
   return (
     <div className="content">
       <div className="section-title">
@@ -47,11 +53,11 @@ export async function OrderStatusPage({
             </tr>
           </thead>
           <tbody>
-            {rows.map((o: Order) => (
+            {(data ?? []).map((o: OrderRow) => (
               <tr key={o.id}>
-                <td>{o.order_date ? new Date(o.order_date).toLocaleDateString("pt-BR") : "—"}</td>
-                <td>{o.customers?.name || "—"}</td>
-                <td>{o.sales_channels?.name || "—"}</td>
+                <td>{new Date(o.order_date).toLocaleDateString("pt-BR")}</td>
+                <td>{o.customers?.[0]?.name || "—"}</td>
+                <td>{o.sales_channels?.[0]?.name || "—"}</td>
                 <td>
                   <OrderStatusActions id={o.id} status={o.status} />
                 </td>
@@ -63,7 +69,7 @@ export async function OrderStatusPage({
                 </td>
               </tr>
             ))}
-            {!rows.length && (
+            {!data?.length && (
               <tr>
                 <td colSpan={6} className="muted">
                   Nenhum pedido nesta etapa.

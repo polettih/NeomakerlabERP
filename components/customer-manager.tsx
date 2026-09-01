@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-type C = {
+export type Customer = {
   id: string;
   name: string;
   email: string | null;
@@ -10,9 +10,9 @@ type C = {
   notes: string | null;
 };
 const opts = ["Excelente", "Bom", "Normal", "Problemático", "Péssimo", "Bloqueado"];
-export function CustomerManager({ customers }: { customers: C[] }) {
+export function CustomerManager({ customers }: { customers: Customer[] }) {
   const r = useRouter();
-  const [edit, setEdit] = useState<C | null>(null);
+  const [edit, setEdit] = useState<Customer | null>(null);
   const [q, setQ] = useState("");
   const list = customers.filter((c) => c.name.toLowerCase().includes(q.toLowerCase()));
   async function save() {

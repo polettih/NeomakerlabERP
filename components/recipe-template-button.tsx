@@ -1,8 +1,19 @@
 "use client";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { PaintingRecipeTemplate } from "@/lib/types";
-export function RecipeTemplateButton({ template }: { template: PaintingRecipeTemplate }) {
+
+type RecipeTemplate = {
+  name: string;
+  category: string;
+  description: string | null;
+  colors: string[] | null;
+  dilution: string | null;
+  finish: string | null;
+  notes: string | null;
+  steps?: { technique: string; paint: string; note: string }[];
+};
+
+export function RecipeTemplateButton({ template }: { template: RecipeTemplate }) {
   const r = useRouter();
   const [busy, setBusy] = useState(false);
   async function add() {
@@ -18,6 +29,7 @@ export function RecipeTemplateButton({ template }: { template: PaintingRecipeTem
         dilution: template.dilution,
         finish: template.finish,
         notes: template.notes,
+        steps: template.steps ?? [],
       }),
     });
     setBusy(false);

@@ -1,5 +1,5 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { errorMessage } from "@/lib/errors";
 import type { Machine } from "@/lib/types";
@@ -32,7 +32,7 @@ export function MachineManager({ machines }: { machines: Machine[] }) {
       setForm(blank);
       setEditing(null);
       r.refresh();
-    } catch (e: unknown) {
+    } catch (e) {
       setError(errorMessage(e));
     }
   }
@@ -51,7 +51,7 @@ export function MachineManager({ machines }: { machines: Machine[] }) {
     setEditing(m);
     setForm({
       name: m.name,
-      category: m.category || "Impressora FDM",
+      category: m.category,
       power_kw: String(m.power_kw || 0),
       purchase_value: String(m.purchase_value || 0),
       useful_hours: String(m.useful_hours || 0),
