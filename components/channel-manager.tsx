@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money } from "@/lib/format";
 import type { FeeBand } from "@/lib/fee-bands";
@@ -343,8 +343,8 @@ export function ChannelManager({ channels }: { channels: Channel[] }) {
               const hasBands = (c.fee_bands ?? []).length > 0;
               const editingBands = editBands[c.id] ?? c.fee_bands ?? [];
               return (
-                <>
-                  <tr key={c.id}>
+                <Fragment key={c.id}>
+                  <tr>
                     <td>
                       <input
                         className="input"
@@ -442,7 +442,7 @@ export function ChannelManager({ channels }: { channels: Channel[] }) {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               );
             })}
           </tbody>
