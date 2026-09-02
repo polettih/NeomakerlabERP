@@ -1,6 +1,7 @@
 "use client";
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { resolveChannelFee, type ChannelTier } from "@/lib/pricing";
 type P = {
   id: string;
   name: string;
@@ -11,15 +12,18 @@ type P = {
 };
 type C = { id: string; name: string };
 type Ch = { id: string; name: string; fee_percent: number; fixed_fee: number };
+type Tier = ChannelTier & { channel_id: string };
 const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 export function CreateOrderForm({
   customers,
   products,
   channels,
+  tiers,
 }: {
   customers: C[];
   products: P[];
   channels: Ch[];
+  tiers: Tier[];
 }) {
   const r = useRouter();
   const [customer, setCustomer] = useState("");
@@ -34,14 +38,21 @@ export function CreateOrderForm({
   const [error, setError] = useState("");
   const selected = products.find((p) => p.id === product);
   const selectedChannel = channels.find((c) => c.id === channel);
+  const selectedTiers = useMemo(
+    () => tiers.filter((t) => t.channel_id === channel),
+    [tiers, channel]
+  );
   const calc = useMemo(() => {
     const subtotal = (selected?.sale_price || 0) * qty;
     const merchandise = Math.max(subtotal - discount, 0);
-    const fee =
-      merchandise * (selectedChannel?.fee_percent || 0) + (selectedChannel?.fixed_fee || 0);
+    // Mesma função usada pelo servidor ao salvar o pedido (lib/pricing.ts) — a prévia
+    // que o usuário vê aqui é garantidamente igual ao que será gravado.
+    const { fee } = selectedChannel
+      ? resolveChannelFee(merchandise, selectedChannel, selectedTiers)
+      : { fee: 0 };
     const gross = merchandise + fee + shipping;
     return { subtotal, merchandise, fee, gross };
-  }, [selected, qty, discount, shipping, selectedChannel]);
+  }, [selected, qty, discount, shipping, selectedChannel, selectedTiers]);
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError("");
@@ -87,12 +98,19 @@ export function CreateOrderForm({
           <label>Canal de venda</label>
           <select className="select" value={channel} onChange={(e) => setChannel(e.target.value)}>
             <option value="">Venda direta — sem taxa</option>
-            {channels.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} — {(Number(c.fee_percent) * 100).toFixed(2)}%
-                {Number(c.fixed_fee) > 0 ? ` + ${money(Number(c.fixed_fee))}` : ""}
-              </option>
-            ))}
+            {channels.map((c) => {
+              const hasTiers = tiers.some((t) => t.channel_id === c.id);
+              return (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {hasTiers
+                    ? " — taxa por faixa de preço"
+                    : ` — ${(Number(c.fee_percent) * 100).toFixed(2)}%${
+                        Number(c.fixed_fee) > 0 ? ` + ${money(Number(c.fixed_fee))}` : ""
+                      }`}
+                </option>
+              );
+            })}
           </select>
         </div>
         <div className="field">

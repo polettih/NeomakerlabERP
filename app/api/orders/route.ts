@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { errorMessage } from "@/lib/errors";
+import { resolveChannelFee } from "@/lib/pricing";
 
 type OrderItemInput = { product_id: string; quantity?: number };
 
@@ -46,8 +47,27 @@ export async function POST(request: Request) {
         .single();
       if (ce) throw ce;
       if (!channel?.active) throw new Error("O canal selecionado está inativo.");
-      feePercent = Number(channel.fee_percent || 0);
-      fixedFee = Number(channel.fixed_fee || 0);
+      const { data: tiers, error: te } = await supabase
+        .from("sales_channel_tiers")
+        .select("min_value,max_value,fee_percent,fixed_fee")
+        .eq("channel_id", body.sales_channel_id)
+        .order("sort_order");
+      if (te) throw te;
+      // Faixas (ex.: Shopee) têm prioridade sobre a taxa fixa do canal quando existem —
+      // ver lib/pricing.ts. O mesmo resolvedor roda na prévia do formulário, então o
+      // valor calculado aqui nunca diverge do que o usuário viu antes de confirmar.
+      const resolved = resolveChannelFee(
+        merchandiseTotal,
+        { fee_percent: Number(channel.fee_percent || 0), fixed_fee: Number(channel.fixed_fee || 0) },
+        (tiers ?? []).map((t) => ({
+          min_value: Number(t.min_value),
+          max_value: t.max_value === null ? null : Number(t.max_value),
+          fee_percent: Number(t.fee_percent),
+          fixed_fee: Number(t.fixed_fee),
+        }))
+      );
+      feePercent = resolved.feePercent;
+      fixedFee = resolved.fixedFee;
     }
     const marketplaceFee = Math.max(merchandiseTotal * feePercent + fixedFee, 0);
     const grossTotal = Math.max(merchandiseTotal + marketplaceFee + shipping, 0);
