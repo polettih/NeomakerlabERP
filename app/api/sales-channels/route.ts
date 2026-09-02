@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { errorMessage } from "@/lib/errors";
+import { sanitizeFeeBands } from "@/lib/fee-bands";
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { supabase, organizationId } = await requireUser();
     if (!String(body.name || "").trim())
       return NextResponse.json({ error: "Nome do canal é obrigatório." }, { status: 400 });
+    const feeBands = sanitizeFeeBands(body.fee_bands);
     const { data, error } = await supabase
       .from("sales_channels")
       .insert({
@@ -15,6 +18,7 @@ export async function POST(request: Request) {
         active: body.active !== false,
         fee_percent: Math.max(0, Math.min(1, Number(body.fee_percent || 0))),
         fixed_fee: Math.max(0, Number(body.fixed_fee || 0)),
+        fee_bands: feeBands,
       })
       .select()
       .single();
@@ -24,7 +28,7 @@ export async function POST(request: Request) {
       throw error;
     }
     return NextResponse.json(data);
-  } catch (e) {
+  } catch (e: unknown) {
     return NextResponse.json({ error: errorMessage(e, "Erro ao criar canal.") }, { status: 500 });
   }
 }

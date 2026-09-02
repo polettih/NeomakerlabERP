@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { errorMessage } from "@/lib/errors";
+import { sanitizeFeeBands } from "@/lib/fee-bands";
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -12,6 +14,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (body.fee_percent !== undefined)
       update.fee_percent = Math.max(0, Math.min(1, Number(body.fee_percent)));
     if (body.fixed_fee !== undefined) update.fixed_fee = Math.max(0, Number(body.fixed_fee));
+    if (body.fee_bands !== undefined) update.fee_bands = sanitizeFeeBands(body.fee_bands);
     const { data, error } = await supabase
       .from("sales_channels")
       .update(update)
@@ -26,7 +29,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       throw error;
     }
     return NextResponse.json(data);
-  } catch (e) {
+  } catch (e: unknown) {
     return NextResponse.json({ error: errorMessage(e, "Erro ao atualizar canal.") }, { status: 500 });
   }
 }
@@ -41,7 +44,7 @@ export async function DELETE(_r: Request, { params }: { params: Promise<{ id: st
       .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
-  } catch (e) {
+  } catch (e: unknown) {
     return NextResponse.json(
       { error: errorMessage(e, "Não foi possível excluir o canal.") },
       { status: 500 }
