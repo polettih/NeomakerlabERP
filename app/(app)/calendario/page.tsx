@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth";
-import { InteractiveCalendar } from "@/components/interactive-calendar";
+import { InteractiveCalendar, type CalendarOrder } from "@/components/interactive-calendar";
 export default async function CalendarioPage() {
   const { supabase } = await requireUser();
   const { data: orders } = await supabase
@@ -19,7 +19,7 @@ export default async function CalendarioPage() {
           </p>
         </div>
       </div>
-      <InteractiveCalendar orders={orders ?? []} />
+      <InteractiveCalendar orders={(orders ?? []) as unknown as CalendarOrder[]} />
     </div>
   );
 }

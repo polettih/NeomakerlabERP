@@ -25,12 +25,12 @@ const statusClass: Record<string, string> = {
 function dateKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-type CalendarOrder = {
+export type CalendarOrder = {
   id: string;
   status: string;
   expected_date: string | null;
   completed_at: string | null;
-  customers: { name: string }[] | null;
+  customers: { name: string } | null;
   order_items: { product_name: string; quantity: number }[] | null;
 };
 export function InteractiveCalendar({ orders }: { orders: CalendarOrder[] }) {
@@ -138,7 +138,7 @@ export function InteractiveCalendar({ orders }: { orders: CalendarOrder[] }) {
                     }}
                     className={`calendar-event-pill ${statusClass[o.status] || ""}`}
                   >
-                    <strong>{o.customers?.[0]?.name || "Pedido"}</strong>
+                    <strong>{o.customers?.name || "Pedido"}</strong>
                     <span>
                       {o.order_items?.map((i) => i.product_name).join(", ") || "Sem produto"}
                     </span>
@@ -159,7 +159,7 @@ export function InteractiveCalendar({ orders }: { orders: CalendarOrder[] }) {
           {(byDay[selected] || []).map((o: CalendarOrder) => (
             <div className="detail-event" key={o.id}>
               <div>
-                <strong>{o.customers?.[0]?.name || "Pedido"}</strong>
+                <strong>{o.customers?.name || "Pedido"}</strong>
                 <div className="muted">
                   {o.order_items?.map((i) => `${i.product_name} × ${i.quantity}`).join(" • ")}
                 </div>
