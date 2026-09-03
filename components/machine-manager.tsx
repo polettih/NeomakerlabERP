@@ -105,15 +105,21 @@ export function MachineManager({ machines }: { machines: Machine[] }) {
             </select>
           </div>
           <div className="field">
-            <label>Potência (kW)</label>
+            <label>Potência (W)</label>
             <input
               className="input"
               type="number"
-              step="0.001"
+              step="1"
               min="0"
-              value={form.power_kw}
-              onChange={(e) => setForm({ ...form, power_kw: e.target.value })}
+              placeholder="Ex.: 350 (veja na etiqueta ou na fonte da impressora)"
+              value={form.power_kw === "0" ? "" : String(Math.round(Number(form.power_kw) * 1000))}
+              onChange={(e) =>
+                setForm({ ...form, power_kw: String((Number(e.target.value) || 0) / 1000) })
+              }
             />
+            <small className="muted">
+              Use o valor em Watts (W) da etiqueta ou da fonte de alimentação — não o de kW.
+            </small>
           </div>
           <div className="field">
             <label>Valor de aquisição</label>
@@ -192,7 +198,7 @@ export function MachineManager({ machines }: { machines: Machine[] }) {
                   <strong>{m.name}</strong>
                 </td>
                 <td>{m.category}</td>
-                <td>{Number(m.power_kw).toFixed(3)} kW</td>
+                <td>{Math.round(Number(m.power_kw) * 1000)} W</td>
                 <td>{money(Number(m.purchase_value || 0))}</td>
                 <td>{money(Number(m.depreciation_per_hour || 0))}</td>
                 <td>
