@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { money, n } from "@/lib/format";
 import { errorMessage } from "@/lib/errors";
+import { HoursMinutesInput } from "@/components/hours-minutes-input";
 const cats = ["Bonecos", "Objetos", "Miniaturas", "Decoração", "Outros"];
 const costOf = (m: Material | undefined, q: number) => {
   if (!m) return 0;
@@ -80,8 +81,8 @@ export function ProductEditor({
     [paintingMaterials, setPaintingMaterials] = useState("0"),
     [packagingCost, setPackagingCost] = useState("0"),
     [otherCost, setOtherCost] = useState("0"),
-    [lossPercent, setLossPercent] = useState("8"),
-    [marginPercent, setMarginPercent] = useState("20");
+    [lossPercent, setLossPercent] = useState("20"),
+    [marginPercent, setMarginPercent] = useState("50");
   const fdmMachines = machines.filter((m) => m.category === "Impressora FDM" && m.active),
     resinMachines = machines.filter((m) => m.category === "Impressora Resina" && m.active);
   const fdmMaterials = materials.filter((m) => m.material_type === "Filamento");
@@ -489,15 +490,8 @@ export function ProductEditor({
                             ))}
                           </select>
                         </Field>
-                        <Field label="Horas">
-                          <input
-                            className="input"
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={fdmHours}
-                            onChange={(e) => setFdmHours(e.target.value)}
-                          />
+                        <Field label="Tempo de impressão">
+                          <HoursMinutesInput value={fdmHours} onChange={setFdmHours} />
                         </Field>
                         <Field label="Custo dos filamentos">
                           <div className="input">{money(fdmCost)}</div>
@@ -605,15 +599,8 @@ export function ProductEditor({
                             ))}
                           </select>
                         </Field>
-                        <Field label="Horas">
-                          <input
-                            className="input"
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={resinHours}
-                            onChange={(e) => setResinHours(e.target.value)}
-                          />
+                        <Field label="Tempo de impressão">
+                          <HoursMinutesInput value={resinHours} onChange={setResinHours} />
                         </Field>
                         <Field label="Custo das resinas">
                           <div className="input">{money(resinCost)}</div>
@@ -704,24 +691,10 @@ export function ProductEditor({
                 </div>
                 <div className="form-grid">
                   <Field label="Horas de pintura">
-                    <input
-                      className="input"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={paintingHours}
-                      onChange={(e) => setPaintingHours(e.target.value)}
-                    />
+                    <HoursMinutesInput value={paintingHours} onChange={setPaintingHours} />
                   </Field>
                   <Field label="Horas de acabamento">
-                    <input
-                      className="input"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={finishingHours}
-                      onChange={(e) => setFinishingHours(e.target.value)}
-                    />
+                    <HoursMinutesInput value={finishingHours} onChange={setFinishingHours} />
                   </Field>
                   <Field label="Valor/hora">
                     <div className="input">{money(laborHourRate)}</div>
