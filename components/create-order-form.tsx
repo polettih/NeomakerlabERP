@@ -27,8 +27,11 @@ export function CreateOrderForm({
   const [channel, setChannel] = useState("");
   const [product, setProduct] = useState(products[0]?.id || "");
   const [qty, setQty] = useState(1);
+  const [unitPrice, setUnitPrice] = useState(() => products[0]?.sale_price ?? 0);
+  const [priceTouched, setPriceTouched] = useState(false);
   const [discount, setDiscount] = useState(0);
   const [shipping, setShipping] = useState(0);
+  const [campaignFee, setCampaignFee] = useState(0);
   const [orderDate, setOrderDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [status, setStatus] = useState("new");
   const [completedDate, setCompletedDate] = useState("");
@@ -36,19 +39,24 @@ export function CreateOrderForm({
   const selected = products.find((p) => p.id === product);
   const selectedChannel = channels.find((c) => c.id === channel);
   const calc = useMemo(() => {
-    const subtotal = (selected?.sale_price || 0) * qty;
+    const subtotal = unitPrice * qty;
     const merchandise = Math.max(subtotal - discount, 0);
     const bands = selectedChannel?.fee_bands ?? [];
     const band = resolveFeeBand(bands, merchandise);
     const feePercent = band ? band.fee_percent : selectedChannel?.fee_percent || 0;
     const fixedFee = band ? band.fixed_fee : selectedChannel?.fixed_fee || 0;
-    const fee = merchandise * feePercent + fixedFee;
+    const channelFee = merchandise * feePercent + fixedFee;
+    const fee = channelFee + Math.max(campaignFee, 0);
     const gross = merchandise + fee + shipping;
-    return { subtotal, merchandise, fee, feePercent, fixedFee, band, gross };
-  }, [selected, qty, discount, shipping, selectedChannel]);
+    return { subtotal, merchandise, channelFee, fee, feePercent, fixedFee, band, gross };
+  }, [unitPrice, qty, discount, shipping, campaignFee, selectedChannel]);
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError("");
+    if (unitPrice <= 0) {
+      setError("Informe o valor cobrado do cliente para este pedido.");
+      return;
+    }
     if (status === "delivered" && !completedDate) {
       setError("Informe a data de conclusão do pedido.");
       return;
@@ -62,10 +70,11 @@ export function CreateOrderForm({
         sales_channel_id: channel || null,
         discount,
         shipping_cost: shipping,
+        campaign_fee: Math.max(campaignFee, 0),
         order_date: new Date(`${orderDate}T12:00:00`).toISOString(),
         status,
         completed_at: completedAt,
-        items: [{ product_id: product, quantity: qty }],
+        items: [{ product_id: product, quantity: qty, unit_price: unitPrice }],
       }),
     });
     const j = await res.json();
@@ -109,7 +118,16 @@ export function CreateOrderForm({
         </div>
         <div className="field">
           <label>Produto</label>
-          <select className="select" value={product} onChange={(e) => setProduct(e.target.value)}>
+          <select
+            className="select"
+            value={product}
+            onChange={(e) => {
+              const p = products.find((x) => x.id === e.target.value);
+              setProduct(e.target.value);
+              setPriceTouched(false);
+              setUnitPrice(p?.sale_price ?? 0);
+            }}
+          >
             {products.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name} — {money(Number(p.sale_price))}
@@ -132,6 +150,39 @@ export function CreateOrderForm({
               </div>
             </div>
           ) : null}
+        </div>
+        <div className="field">
+          <label>Valor unitário cobrado do cliente</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              className="input"
+              type="number"
+              step="0.01"
+              min="0"
+              value={unitPrice}
+              onChange={(e) => {
+                setUnitPrice(Math.max(0, Number(e.target.value) || 0));
+                setPriceTouched(true);
+              }}
+            />
+            {priceTouched && Number(selected?.sale_price) !== unitPrice && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  setUnitPrice(selected?.sale_price ?? 0);
+                  setPriceTouched(false);
+                }}
+                title="Voltar para o preço cadastrado no produto"
+              >
+                Usar padrão
+              </button>
+            )}
+          </div>
+          <p className="muted">
+            Vem preenchido com o preço do produto, mas edite livremente para usar o valor real
+            do anúncio (Shopee, TikTok Shop, promoções etc.).
+          </p>
         </div>
         <div className="field">
           <label>Quantidade</label>
@@ -164,6 +215,21 @@ export function CreateOrderForm({
             value={shipping}
             onChange={(e) => setShipping(Math.max(0, Number(e.target.value) || 0))}
           />
+        </div>
+        <div className="field">
+          <label>Taxa de campanha/promoção (opcional)</label>
+          <input
+            className="input"
+            type="number"
+            step="0.01"
+            min="0"
+            value={campaignFee}
+            onChange={(e) => setCampaignFee(Math.max(0, Number(e.target.value) || 0))}
+          />
+          <p className="muted">
+            Valor extra que o marketplace descontou por participação em campanha/cupom neste
+            pedido específico — some à taxa do canal só nesta venda.
+          </p>
         </div>
         <div className="field">
           <label>Data da venda</label>
@@ -221,7 +287,7 @@ export function CreateOrderForm({
             Desconto: <strong>- {money(discount)}</strong>
           </div>
           <div>
-            Taxa do canal: <strong>{money(calc.fee)}</strong>
+            Taxa do canal: <strong>{money(calc.channelFee)}</strong>
             {calc.band && (
               <span className="muted">
                 {" "}
@@ -230,6 +296,9 @@ export function CreateOrderForm({
                 {(calc.feePercent * 100).toFixed(2)}% + {money(calc.fixedFee)})
               </span>
             )}
+          </div>
+          <div>
+            Taxa de campanha: <strong>{money(campaignFee)}</strong>
           </div>
           <div>
             Frete: <strong>{money(shipping)}</strong>

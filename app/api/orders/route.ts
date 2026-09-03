@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { errorMessage } from "@/lib/errors";
 import { resolveFeeBand, type FeeBand } from "@/lib/fee-bands";
 
-type OrderItemInput = { product_id: string; quantity?: number };
+type OrderItemInput = { product_id: string; quantity?: number; unit_price?: number };
 
 export async function POST(request: Request) {
   const { supabase, organizationId } = await requireUser();
@@ -22,20 +22,30 @@ export async function POST(request: Request) {
       const p = products?.find((x) => x.id === i.product_id);
       if (!p) throw new Error("Produto inválido.");
       const q = Math.max(Number(i.quantity || 1), 1);
+      // Preço unitário desta venda: por padrão é o preço cadastrado no produto, mas o
+      // formulário permite sobrescrever para refletir o valor real cobrado no anúncio
+      // (Shopee, TikTok Shop, promoções variam por pedido). O custo (unit_cost) segue
+      // vindo do produto normalmente — só o preço de venda muda por pedido.
+      const rawUnitPrice = Number(i.unit_price);
+      const unitPrice =
+        Number.isFinite(rawUnitPrice) && rawUnitPrice > 0 ? rawUnitPrice : Number(p.sale_price);
       return {
         product_id: p.id,
         product_name: p.name,
         quantity: q,
-        unit_price: Number(p.sale_price),
+        unit_price: unitPrice,
         unit_cost: Number(p.estimated_cost),
         discount: 0,
-        total: Number(p.sale_price) * q,
+        total: unitPrice * q,
       };
     });
     const subtotal = items.reduce((s, i) => s + i.total, 0);
     const discount = Math.max(Number(body.discount || 0), 0);
     const merchandiseTotal = Math.max(subtotal - discount, 0);
     const shipping = Math.max(Number(body.shipping_cost || 0), 0);
+    // Taxa extra de campanha/cupom informada manualmente para este pedido específico —
+    // não faz parte da configuração do canal porque varia venda a venda.
+    const campaignFee = Math.max(Number(body.campaign_fee || 0), 0);
     let feePercent = 0;
     let fixedFee = 0;
     if (body.sales_channel_id) {
@@ -60,7 +70,7 @@ export async function POST(request: Request) {
         fixedFee = Number(channel.fixed_fee || 0);
       }
     }
-    const marketplaceFee = Math.max(merchandiseTotal * feePercent + fixedFee, 0);
+    const marketplaceFee = Math.max(merchandiseTotal * feePercent + fixedFee + campaignFee, 0);
     const grossTotal = Math.max(merchandiseTotal + marketplaceFee + shipping, 0);
     const status = body.status || "new";
     const allowed = [
