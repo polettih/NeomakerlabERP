@@ -36,12 +36,29 @@ export function MachineManager({ machines }: { machines: Machine[] }) {
       setError(errorMessage(e));
     }
   }
-  async function disable(id: string) {
-    if (!confirm("Desativar este equipamento? Ele continuará no histórico financeiro.")) return;
+  async function toggleActive(m: Machine) {
+    setError("");
+    const res = await fetch("/api/machines", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: m.id, active: !m.active }),
+    });
+    const j = await res.json();
+    if (!res.ok) setError(j.error || "Erro");
+    else r.refresh();
+  }
+  async function remove(m: Machine) {
+    if (
+      !confirm(
+        `Excluir "${m.name}" definitivamente? A despesa de compra deste equipamento também será removida do Financeiro. Esta ação não pode ser desfeita — se preferir manter o histórico, use "Desativar" em vez de excluir.`
+      )
+    )
+      return;
+    setError("");
     const res = await fetch("/api/machines", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
+      body: JSON.stringify({ id: m.id }),
     });
     const j = await res.json();
     if (!res.ok) setError(j.error || "Erro");
@@ -62,7 +79,7 @@ export function MachineManager({ machines }: { machines: Machine[] }) {
   return (
     <div className="grid two-col">
       {error && (
-        <div className="error" style={{ gridColumn: "1/-1" }}>
+        <div className="error" role="alert" style={{ gridColumn: "1/-1" }}>
           {error}
         </div>
       )}
@@ -207,16 +224,17 @@ export function MachineManager({ machines }: { machines: Machine[] }) {
                   </span>
                 </td>
                 <td>
-                  {m.active && (
-                    <div className="actions">
-                      <button className="btn btn-secondary btn-sm" onClick={() => edit(m)}>
-                        Editar
-                      </button>
-                      <button className="btn btn-danger btn-sm" onClick={() => disable(m.id)}>
-                        Desativar
-                      </button>
-                    </div>
-                  )}
+                  <div className="actions">
+                    <button className="btn btn-secondary btn-sm" onClick={() => edit(m)}>
+                      Editar
+                    </button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => toggleActive(m)}>
+                      {m.active ? "Desativar" : "Ativar"}
+                    </button>
+                    <button className="btn btn-danger btn-sm" onClick={() => remove(m)}>
+                      Excluir
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

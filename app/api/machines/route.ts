@@ -89,16 +89,20 @@ export async function DELETE(req: Request) {
     const { supabase, organizationId } = await requireUser();
     const b = await req.json();
     if (!b.id) return NextResponse.json({ error: "ID obrigatório." }, { status: 400 });
+    // Exclusão de verdade (não apenas desativação): o gatilho do banco
+    // (sync_machine_purchase_expense) cancela automaticamente a despesa de
+    // compra de equipamento vinculada a esta máquina, removendo-a do
+    // Financeiro também.
     const { error } = await supabase
       .from("machines")
-      .update({ active: false })
+      .delete()
       .eq("id", b.id)
       .eq("organization_id", organizationId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json(
-      { error: errorMessage(e, "Erro ao desativar equipamento.") },
+      { error: errorMessage(e, "Erro ao excluir equipamento.") },
       { status: 500 }
     );
   }
