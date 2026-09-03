@@ -46,12 +46,14 @@ export function ProductEditor({
   machines,
   laborHourRate,
   energyCostKwh,
+  organizationId,
 }: {
   product: Product;
   materials: Material[];
   machines: Machine[];
   laborHourRate: number;
   energyCostKwh: number;
+  organizationId: string;
 }) {
   const r = useRouter();
   const ref = useRef<HTMLInputElement>(null);
@@ -81,8 +83,8 @@ export function ProductEditor({
     [paintingMaterials, setPaintingMaterials] = useState("0"),
     [packagingCost, setPackagingCost] = useState("0"),
     [otherCost, setOtherCost] = useState("0"),
-    [lossPercent, setLossPercent] = useState("8"),
-    [marginPercent, setMarginPercent] = useState("20");
+    [lossPercent, setLossPercent] = useState("20"),
+    [marginPercent, setMarginPercent] = useState("50");
   const fdmMachines = machines.filter((m) => m.category === "Impressora FDM" && m.active),
     resinMachines = machines.filter((m) => m.category === "Impressora Resina" && m.active);
   const fdmMaterials = materials.filter((m) => m.material_type === "Filamento");
@@ -358,6 +360,7 @@ export function ProductEditor({
         const { data: url } = sb.storage.from("product-images").getPublicUrl(path);
         paths.push({
           product_id: product.id,
+          organization_id: organizationId,
           storage_path: path,
           public_url: url.publicUrl,
           sort_order: images.length + i,

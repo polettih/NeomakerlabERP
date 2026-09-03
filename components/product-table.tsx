@@ -23,12 +23,14 @@ export function ProductTable({
   machines,
   laborHourRate,
   energyCostKwh,
+  organizationId,
 }: {
   products: Product[];
   materials: Material[];
   machines: Machine[];
   laborHourRate: number;
   energyCostKwh: number;
+  organizationId: string;
 }) {
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("Todas");
@@ -137,6 +139,7 @@ export function ProductTable({
                       machines={machines}
                       laborHourRate={laborHourRate}
                       energyCostKwh={energyCostKwh}
+                      organizationId={organizationId}
                     />
                     <ProductActions id={p.id} active={p.active} />
                   </div>

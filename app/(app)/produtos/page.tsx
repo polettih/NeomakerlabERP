@@ -58,6 +58,7 @@ export default async function ProdutosPage() {
         machines={machines ?? []}
         laborHourRate={Number(settings?.labor_hour_rate ?? 30)}
         energyCostKwh={Number(settings?.energy_cost_kwh ?? 1.12)}
+        organizationId={organizationId}
       />
       <ProductTable
         products={(data ?? []) as ProductRow[]}
@@ -65,6 +66,7 @@ export default async function ProdutosPage() {
         machines={machines ?? []}
         laborHourRate={Number(settings?.labor_hour_rate ?? 30)}
         energyCostKwh={Number(settings?.energy_cost_kwh ?? 1.12)}
+        organizationId={organizationId}
       />
     </div>
   );
