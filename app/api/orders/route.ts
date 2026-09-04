@@ -71,7 +71,17 @@ export async function POST(request: Request) {
       }
     }
     const marketplaceFee = Math.max(merchandiseTotal * feePercent + fixedFee + campaignFee, 0);
-    const grossTotal = Math.max(merchandiseTotal + marketplaceFee + shipping, 0);
+    // "add" (padrão): a taxa soma ao valor cobrado do cliente — o alvo de recebimento
+    // (gross_total, usado em "A receber") inclui a taxa.
+    // "subtract": o valor informado já é o preço do anúncio (Shopee/TikTok Shop); o
+    // marketplace desconta a taxa ANTES de repassar o dinheiro, então o alvo de
+    // recebimento precisa ser o valor líquido — senão "A receber" nunca zeraria mesmo
+    // com o pagamento completo registrado.
+    const feeMode = body.fee_mode === "subtract" ? "subtract" : "add";
+    const grossTotal =
+      feeMode === "add"
+        ? Math.max(merchandiseTotal + marketplaceFee + shipping, 0)
+        : Math.max(merchandiseTotal - marketplaceFee, 0) + shipping;
     const status = body.status || "new";
     const allowed = [
       "new",

@@ -32,6 +32,14 @@ export function CreateOrderForm({
   const [discount, setDiscount] = useState(0);
   const [shipping, setShipping] = useState(0);
   const [campaignFee, setCampaignFee] = useState(0);
+  // Como a taxa do canal se relaciona com o valor digitado:
+  // "add"  → o valor digitado é o preço líquido; a taxa é somada por cima para chegar
+  //          no total cobrado do cliente (comportamento antigo/padrão).
+  // "subtract" → o valor digitado já é o preço final, igual ao que aparece no anúncio
+  //          da Shopee/TikTok Shop; a taxa é descontada dele, e é isso que sobra de
+  //          receita líquida no Financeiro. O cliente nunca paga a mais por causa da
+  //          taxa nesse modo.
+  const [feeMode, setFeeMode] = useState<"add" | "subtract">("add");
   const [orderDate, setOrderDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [status, setStatus] = useState("new");
   const [completedDate, setCompletedDate] = useState("");
@@ -47,9 +55,18 @@ export function CreateOrderForm({
     const fixedFee = band ? band.fixed_fee : selectedChannel?.fixed_fee || 0;
     const channelFee = merchandise * feePercent + fixedFee;
     const fee = channelFee + Math.max(campaignFee, 0);
-    const gross = merchandise + fee + shipping;
-    return { subtotal, merchandise, channelFee, fee, feePercent, fixedFee, band, gross };
-  }, [unitPrice, qty, discount, shipping, campaignFee, selectedChannel]);
+    const netAfterFee = Math.max(merchandise - fee, 0);
+    // "add": a taxa soma ao valor digitado para formar o total cobrado do cliente —
+    // o alvo de recebimento é o valor cheio + taxa (ex.: taxa cobrada à parte do
+    // cliente, incomum, mas possível em vendas diretas negociadas).
+    // "subtract": o valor digitado já é o preço final do anúncio (Shopee/TikTok
+    // Shop) — a taxa é descontada pelo marketplace ANTES de repassar o dinheiro, então
+    // o alvo de recebimento (o que efetivamente cai na conta) é o valor líquido, não o
+    // valor cheio. Sem isso, "A receber" nunca zeraria mesmo com o pagamento completo.
+    const gross =
+      feeMode === "add" ? merchandise + fee + shipping : Math.max(merchandise - fee, 0) + shipping;
+    return { subtotal, merchandise, channelFee, fee, feePercent, fixedFee, band, netAfterFee, gross };
+  }, [unitPrice, qty, discount, shipping, campaignFee, selectedChannel, feeMode]);
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError("");
@@ -71,6 +88,7 @@ export function CreateOrderForm({
         discount,
         shipping_cost: shipping,
         campaign_fee: Math.max(campaignFee, 0),
+        fee_mode: feeMode,
         order_date: new Date(`${orderDate}T12:00:00`).toISOString(),
         status,
         completed_at: completedAt,
@@ -182,6 +200,30 @@ export function CreateOrderForm({
           <p className="muted">
             Vem preenchido com o preço do produto, mas edite livremente para usar o valor real
             do anúncio (Shopee, TikTok Shop, promoções etc.).
+          </p>
+          <div className="filters-row" style={{ marginTop: 8 }}>
+            <span className="muted">A taxa do canal...</span>
+            <button
+              type="button"
+              className={`btn btn-sm ${feeMode === "add" ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => setFeeMode("add")}
+              title="O valor acima é líquido; a taxa soma por cima para o cliente"
+            >
+              Soma ao valor
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm ${feeMode === "subtract" ? "btn-primary" : "btn-secondary"}`}
+              onClick={() => setFeeMode("subtract")}
+              title="O valor acima já é o preço final (Shopee/TikTok); a taxa é descontada dele"
+            >
+              Desconta do valor
+            </button>
+          </div>
+          <p className="muted">
+            {feeMode === "add"
+              ? "O cliente paga o valor acima + a taxa (soma no total do pedido)."
+              : "O valor acima já é o que o cliente paga — a taxa sai da sua receita, sem aumentar o total do pedido."}
           </p>
         </div>
         <div className="field">
@@ -304,13 +346,24 @@ export function CreateOrderForm({
             Frete: <strong>{money(shipping)}</strong>
           </div>
         </div>
-        <div style={{ marginTop: 14 }}>
-          <div className="label">Venda bruta</div>
-          <div className="value">{money(calc.gross)}</div>
+        <div className="grid" style={{ gridTemplateColumns: "repeat(2,1fr)", gap: 8, marginTop: 14 }}>
+          <div>
+            <div className="label">
+              {feeMode === "add" ? "Venda bruta (o que o cliente paga)" : "Valor a receber (líquido)"}
+            </div>
+            <div className="value">{money(calc.gross)}</div>
+          </div>
+          <div>
+            <div className="label">Receita líquida (após taxa, sem frete)</div>
+            <div className="value">{money(calc.netAfterFee)}</div>
+          </div>
         </div>
         <p className="muted" style={{ marginTop: 8 }}>
-          A taxa do marketplace é adicionada ao valor cobrado do cliente. Para canais com faixas
-          de preço (ex.: Shopee), a taxa certa é escolhida automaticamente pelo valor da venda.
+          {feeMode === "add"
+            ? "Modo atual: a taxa soma ao valor digitado — o cliente paga esse total, e é isso que fica como \"a receber\" até você registrar o pagamento."
+            : "Modo atual: o valor digitado é o preço do anúncio; a taxa já foi descontada pelo marketplace antes de cair na sua conta — é o valor líquido que fica como \"a receber\"."}{" "}
+          Para canais com faixas de preço (ex.: Shopee), a taxa certa é escolhida automaticamente
+          pelo valor da venda.
         </p>
       </div>
       <button className="btn btn-primary">Criar pedido</button>
