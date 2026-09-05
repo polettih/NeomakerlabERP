@@ -3,7 +3,13 @@ import { requireUser } from "@/lib/auth";
 import { errorMessage } from "@/lib/errors";
 import { resolveFeeBand, type FeeBand } from "@/lib/fee-bands";
 
-type OrderItemInput = { product_id: string; quantity?: number; unit_price?: number };
+type OrderMaterialInput = { material_id: string; quantity: number; usage_type?: string };
+type OrderItemInput = {
+  product_id: string;
+  quantity?: number;
+  unit_price?: number;
+  materials?: OrderMaterialInput[];
+};
 
 export async function POST(request: Request) {
   const { supabase, organizationId } = await requireUser();
@@ -37,6 +43,12 @@ export async function POST(request: Request) {
         unit_cost: Number(p.estimated_cost),
         discount: 0,
         total: unitPrice * q,
+        // Materiais realmente consumidos nesta venda (pode ser diferente do padrão do
+        // produto — ex.: mesma peça, cor de filamento diferente). Não entram na tabela
+        // order_items; são salvos à parte depois que o item existir, ver abaixo.
+        _materials: (i.materials ?? []).filter(
+          (m) => m?.material_id && Number(m.quantity) > 0
+        ),
       };
     });
     const subtotal = items.reduce((s, i) => s + i.total, 0);
@@ -121,10 +133,41 @@ export async function POST(request: Request) {
       .select()
       .single();
     if (oe) throw oe;
-    const { error: ie } = await supabase
-      .from("order_items")
-      .insert(items.map((i) => ({ ...i, order_id: order.id })));
-    if (ie) throw ie;
+    // Insere item a item (não em lote) para garantir que cada order_item_materials
+    // seja associado ao id certo — uma inserção em lote não garante a ordem de volta
+    // das linhas, e aqui isso decidiria qual variação de material vai para qual item.
+    const materialRows: {
+      organization_id: string;
+      order_item_id: string;
+      material_id: string;
+      quantity: number;
+      usage_type: string;
+    }[] = [];
+    for (const { _materials, ...i } of items) {
+      const { data: row, error: ie } = await supabase
+        .from("order_items")
+        .insert({ ...i, order_id: order.id })
+        .select("id")
+        .single();
+      if (ie) throw ie;
+      for (const m of _materials) {
+        materialRows.push({
+          organization_id: organizationId,
+          order_item_id: row.id,
+          material_id: m.material_id,
+          quantity: Number(m.quantity),
+          usage_type:
+            m.usage_type && ["fdm", "resin", "other"].includes(m.usage_type) ? m.usage_type : "other",
+        });
+      }
+    }
+    // Salva os materiais realmente usados em cada item (padrão do produto ou trocado
+    // por uma variação de cor nesta venda). O gatilho de consumo de estoque usa isso
+    // quando presente, e só cai no padrão do produto se não houver nada aqui.
+    if (materialRows.length) {
+      const { error: ime } = await supabase.from("order_item_materials").insert(materialRows);
+      if (ime) throw ime;
+    }
     const { error: he } = await supabase
       .from("order_status_history")
       .insert({ order_id: order.id, new_status: status });
