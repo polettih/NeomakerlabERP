@@ -9,7 +9,7 @@ export default async function PedidosPage() {
     supabase
       .from("orders")
       .select(
-        "id,status,payment_status,total,gross_total,order_date,expected_date,completed_at,customers(name),sales_channels(name)"
+        "id,status,payment_status,total,gross_total,order_date,expected_date,completed_at,customers(name),sales_channels(name),order_items(product_name,quantity)"
       )
       .order("order_date", { ascending: false }),
     supabase

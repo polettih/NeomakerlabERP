@@ -21,6 +21,7 @@ export type Order = {
   sales_channels: { name: string } | null;
   received: number;
   payments: Payment[];
+  order_items: { product_name: string; quantity: number }[];
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -77,7 +78,8 @@ export function OrderTable({ orders }: { orders: Order[] }) {
       if (!term) return true;
       return (
         (o.customers?.name ?? "").toLowerCase().includes(term) ||
-        (o.sales_channels?.name ?? "").toLowerCase().includes(term)
+        (o.sales_channels?.name ?? "").toLowerCase().includes(term) ||
+        (o.order_items ?? []).some((i) => i.product_name.toLowerCase().includes(term))
       );
     });
   }, [orders, q, status, payment, from, to]);
@@ -135,6 +137,7 @@ export function OrderTable({ orders }: { orders: Order[] }) {
             <tr>
               <th>Data</th>
               <th>Cliente</th>
+              <th>Itens</th>
               <th>Canal</th>
               <th>Prazo</th>
               <th>Conclusão</th>
@@ -149,6 +152,17 @@ export function OrderTable({ orders }: { orders: Order[] }) {
               <tr key={o.id}>
                 <td>{fmt(o.order_date)}</td>
                 <td>{o.customers?.name || "—"}</td>
+                <td>
+                  {o.order_items?.length ? (
+                    <span title={o.order_items.map((i) => `${i.quantity}× ${i.product_name}`).join(", ")}>
+                      {o.order_items.length > 1
+                        ? `${o.order_items.reduce((s, i) => s + Number(i.quantity), 0)} itens (${o.order_items.length} produtos)`
+                        : `${o.order_items[0].quantity}× ${o.order_items[0].product_name}`}
+                    </span>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </td>
                 <td>{o.sales_channels?.name || "—"}</td>
                 <td>{fmt(o.expected_date)}</td>
                 <td>{fmt(o.completed_at)}</td>
@@ -184,7 +198,7 @@ export function OrderTable({ orders }: { orders: Order[] }) {
             ))}
             {!filtered.length && (
               <tr>
-                <td colSpan={9} className="muted">
+                <td colSpan={10} className="muted">
                   {orders.length
                     ? "Nenhum pedido encontrado com esses filtros."
                     : "Nenhum pedido cadastrado."}

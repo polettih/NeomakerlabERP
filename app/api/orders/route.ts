@@ -180,16 +180,34 @@ export async function POST(request: Request) {
           : status === "production"
             ? "in_progress"
             : "pending";
-    const { error: pr } = await supabase.from("production_orders").insert({
-      organization_id: organizationId,
-      order_id: order.id,
-      status: productionStatus,
-      started_at: status === "production" ? new Date().toISOString() : null,
-      completed_at: ["shipped", "delivered", "cancelled"].includes(status)
-        ? completedAt || new Date().toISOString()
-        : null,
-    });
+    // O gatilho que baixa material do estoque (consume_production_materials) só
+    // dispara em UPDATE de status, nunca em INSERT — se a linha já nascesse com
+    // status "in_progress", o consumo automático nunca rodaria. Por isso sempre
+    // insere como "pending" e, quando o pedido já nasce em produção/concluído, faz um
+    // UPDATE logo em seguida para essa mesma transição passar pelo gatilho de verdade.
+    const { data: prodOrder, error: pr } = await supabase
+      .from("production_orders")
+      .insert({
+        organization_id: organizationId,
+        order_id: order.id,
+        status: "pending",
+      })
+      .select("id")
+      .single();
     if (pr) throw pr;
+    if (productionStatus !== "pending") {
+      const { error: pu } = await supabase
+        .from("production_orders")
+        .update({
+          status: productionStatus,
+          started_at: status === "production" ? new Date().toISOString() : null,
+          completed_at: ["shipped", "delivered", "cancelled"].includes(status)
+            ? completedAt || new Date().toISOString()
+            : null,
+        })
+        .eq("id", prodOrder.id);
+      if (pu) throw pu;
+    }
     return NextResponse.json(order);
   } catch (e) {
     return NextResponse.json({ error: errorMessage(e, "Erro interno") }, { status: 500 });
