@@ -30,21 +30,62 @@ const GUESSES: Record<FieldKey, string[]> = {
     "order id",
     "order number",
   ],
-  order_date: ["data de criação do pedido", "data do pedido", "order date", "data de criacao"],
-  sku: ["sku de referência", "sku de referencia", "sku pai", "sku do produto", "sku"],
+  order_date: [
+    "data de criação do pedido",
+    "data de criacao do pedido",
+    "data do pedido",
+    "order date",
+  ],
+  sku: [
+    "número de referência sku",
+    "numero de referencia sku",
+    "nº de referência sku",
+    "sku de referência",
+    "sku de referencia",
+    "sku pai",
+    "sku do produto",
+    "sku",
+  ],
   product_name: ["nome do produto", "product name", "produto"],
   quantity: ["quantidade", "qtd", "quantity"],
+  // "Subtotal do produto" é o valor da linha inteira (preço × quantidade) — é isso que
+  // este campo precisa (o código divide por quantidade depois para achar o valor
+  // unitário). "Preço acordado"/"Preço original" são valores POR UNIDADE e vêm antes
+  // dele na planilha real da Shopee, então precisam ficar depois na lista de tentativas
+  // para não serem escolhidos por engano (senão o valor importado fica dividido pela
+  // quantidade duas vezes).
   item_total: [
-    "preço acordado",
-    "preco acordado",
     "subtotal do produto",
     "total do produto",
     "valor total do pedido",
     "item subtotal",
     "total settlement amount",
+    "preço acordado",
+    "preco acordado",
   ],
   shipping: ["frete", "taxa de envio", "shipping fee"],
 };
+
+// Relatórios brasileiros (Shopee, TikTok Shop) exportam datas como "DD/MM/AAAA HH:mm",
+// que o `new Date(...)` nativo do JS interpreta errado (ou quebra): ele lê como
+// MM/DD, então "10/01/2026" vira 1º de outubro em vez de 10 de janeiro, e datas com
+// dia > 12 (ex.: "25/01/2026") derrubam com "Invalid time value". Por isso nunca
+// confiamos no parser nativo para essas strings.
+function parseBrazilianDate(raw: string): Date | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const m = trimmed.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/
+  );
+  if (m) {
+    const [, d, mo, y, h = "0", mi = "0", s = "0"] = m;
+    const dt = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s));
+    return Number.isNaN(dt.getTime()) ? null : dt;
+  }
+  // Fallback: já pode vir em ISO (planilha com célula de data real, não texto).
+  const fallback = new Date(trimmed);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+}
 
 function normalize(s: string) {
   return s
@@ -61,7 +102,10 @@ function guessColumn(headers: string[], field: FieldKey): string {
     if (idx >= 0) return headers[idx];
   }
   for (const guess of GUESSES[field]) {
-    const idx = normHeaders.findIndex((h) => h.includes(normalize(guess)));
+    const g = normalize(guess);
+    // Bidirecional: pega tanto "sku" dentro de "número de referência sku" quanto o
+    // inverso, porque a ordem das palavras muda de exportação pra exportação.
+    const idx = normHeaders.findIndex((h) => h.includes(g) || g.includes(h));
     if (idx >= 0) return headers[idx];
   }
   return "";
@@ -197,13 +241,15 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
         if (!m.product_id) return;
         const key = m.order_number || `__row_${groups.size}_${Math.random()}`;
         const unitPrice = m.item_total / m.quantity;
-        if (!groups.has(key))
+        if (!groups.has(key)) {
+          const parsed = m.order_date ? parseBrazilianDate(m.order_date) : null;
           groups.set(key, {
             external_order_id: m.order_number || null,
-            order_date: m.order_date ? new Date(m.order_date).toISOString() : null,
+            order_date: parsed ? parsed.toISOString() : null,
             shipping_cost: 0,
             items: [],
           });
+        }
         const g = groups.get(key)!;
         g.shipping_cost += m.shipping;
         g.items.push({ product_id: m.product_id, quantity: m.quantity, unit_price: unitPrice });
