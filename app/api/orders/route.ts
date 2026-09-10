@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { errorMessage } from "@/lib/errors";
-import { resolveFeeBand, type FeeBand } from "@/lib/fee-bands";
+import { calcOrderFeeAndGross } from "@/lib/order-fees";
 
 type OrderMaterialInput = { material_id: string; quantity: number; usage_type?: string };
 type OrderItemInput = {
@@ -46,9 +46,7 @@ export async function POST(request: Request) {
         // Materiais realmente consumidos nesta venda (pode ser diferente do padrão do
         // produto — ex.: mesma peça, cor de filamento diferente). Não entram na tabela
         // order_items; são salvos à parte depois que o item existir, ver abaixo.
-        _materials: (i.materials ?? []).filter(
-          (m) => m?.material_id && Number(m.quantity) > 0
-        ),
+        _materials: (i.materials ?? []).filter((m) => m?.material_id && Number(m.quantity) > 0),
       };
     });
     const subtotal = items.reduce((s, i) => s + i.total, 0);
@@ -58,42 +56,31 @@ export async function POST(request: Request) {
     // Taxa extra de campanha/cupom informada manualmente para este pedido específico —
     // não faz parte da configuração do canal porque varia venda a venda.
     const campaignFee = Math.max(Number(body.campaign_fee || 0), 0);
-    let feePercent = 0;
-    let fixedFee = 0;
+    let channel: {
+      fee_percent: number;
+      fixed_fee: number;
+      fee_bands: unknown;
+      active: boolean;
+    } | null = null;
     if (body.sales_channel_id) {
-      const { data: channel, error: ce } = await supabase
+      const { data, error: ce } = await supabase
         .from("sales_channels")
         .select("fee_percent,fixed_fee,fee_bands,active")
         .eq("id", body.sales_channel_id)
         .eq("organization_id", organizationId)
         .single();
       if (ce) throw ce;
-      if (!channel?.active) throw new Error("O canal selecionado está inativo.");
-      const bands = (channel.fee_bands ?? []) as FeeBand[];
-      // Quando o canal tem faixas de preço cadastradas (ex.: Shopee), a taxa é
-      // escolhida automaticamente pelo valor da mercadoria deste pedido — em
-      // vez de depender de o lojista lembrar de escolher o canal certo.
-      const band = resolveFeeBand(bands, merchandiseTotal);
-      if (band) {
-        feePercent = band.fee_percent;
-        fixedFee = band.fixed_fee;
-      } else {
-        feePercent = Number(channel.fee_percent || 0);
-        fixedFee = Number(channel.fixed_fee || 0);
-      }
+      if (!data?.active) throw new Error("O canal selecionado está inativo.");
+      channel = data;
     }
-    const marketplaceFee = Math.max(merchandiseTotal * feePercent + fixedFee + campaignFee, 0);
-    // "add" (padrão): a taxa soma ao valor cobrado do cliente — o alvo de recebimento
-    // (gross_total, usado em "A receber") inclui a taxa.
-    // "subtract": o valor informado já é o preço do anúncio (Shopee/TikTok Shop); o
-    // marketplace desconta a taxa ANTES de repassar o dinheiro, então o alvo de
-    // recebimento precisa ser o valor líquido — senão "A receber" nunca zeraria mesmo
-    // com o pagamento completo registrado.
     const feeMode = body.fee_mode === "subtract" ? "subtract" : "add";
-    const grossTotal =
-      feeMode === "add"
-        ? Math.max(merchandiseTotal + marketplaceFee + shipping, 0)
-        : Math.max(merchandiseTotal - marketplaceFee, 0) + shipping;
+    const { feePercent, fixedFee, marketplaceFee, grossTotal } = calcOrderFeeAndGross({
+      channel,
+      merchandiseTotal,
+      shipping,
+      campaignFee,
+      feeMode,
+    });
     const status = body.status || "new";
     const allowed = [
       "new",
@@ -157,7 +144,9 @@ export async function POST(request: Request) {
           material_id: m.material_id,
           quantity: Number(m.quantity),
           usage_type:
-            m.usage_type && ["fdm", "resin", "other"].includes(m.usage_type) ? m.usage_type : "other",
+            m.usage_type && ["fdm", "resin", "other"].includes(m.usage_type)
+              ? m.usage_type
+              : "other",
         });
       }
     }

@@ -37,9 +37,14 @@ export default async function PedidosPage() {
           <h1>Pedidos</h1>
           <p className="muted">Acompanhe e altere o status de cada pedido.</p>
         </div>
-        <Link className="btn btn-primary" href="/pedidos/novo">
-          + Novo pedido
-        </Link>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link className="btn btn-secondary" href="/pedidos/importar">
+            Importar vendas
+          </Link>
+          <Link className="btn btn-primary" href="/pedidos/novo">
+            + Novo pedido
+          </Link>
+        </div>
       </div>
       <OrderTable orders={withPayments as unknown as Order[]} />
     </div>
