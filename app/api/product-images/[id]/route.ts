@@ -12,7 +12,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
       .eq("organization_id", organizationId)
       .single();
     if (getErr) throw getErr;
-    if (image?.storage_path)
+    // Fotos importadas de um catálogo externo (Shopee) apontam para uma URL
+    // que não existe no nosso bucket — não tenta remover do storage nesse caso.
+    if (image?.storage_path && !image.storage_path.startsWith("external:"))
       await supabase.storage.from("product-images").remove([image.storage_path]);
     const { error } = await supabase
       .from("product_images")

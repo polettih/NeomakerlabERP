@@ -12,7 +12,8 @@ type ProductRow = {
   active: boolean;
   category: string | null;
   created_at: string;
-  product_images: { id: string; public_url: string; storage_path: string; sort_order: number }[] | null;
+  product_images:
+    { id: string; public_url: string; storage_path: string; sort_order: number }[] | null;
 };
 
 export default async function ProdutosPage() {
@@ -53,8 +54,8 @@ export default async function ProdutosPage() {
           <h1>Produtos</h1>
           <p className="muted">Catálogo, disponibilidade, categorias e fotos</p>
         </div>
-        <Link className="btn btn-secondary" href="/produtos/importar">
-          Importar da Shopee →
+        <Link className="btn btn-secondary" href="/produtos/importar-catalogo">
+          Importar da Shopee
         </Link>
       </div>
       <CreateProductForm
