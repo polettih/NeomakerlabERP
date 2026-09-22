@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth";
+import Link from "next/link";
 import { CreateProductForm } from "@/components/create-product-form";
 import { ProductTable } from "@/components/product-table";
 
@@ -52,6 +53,9 @@ export default async function ProdutosPage() {
           <h1>Produtos</h1>
           <p className="muted">Catálogo, disponibilidade, categorias e fotos</p>
         </div>
+        <Link className="btn btn-secondary" href="/produtos/importar">
+          Importar da Shopee →
+        </Link>
       </div>
       <CreateProductForm
         materials={materials ?? []}
