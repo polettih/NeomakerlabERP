@@ -41,7 +41,7 @@ function SkuImport() {
       setHeaders(h);
       setRows(r);
       setNameCol(guessHeader(h, ["nome do produto", "product name"]));
-      setSkuCol(guessHeader(h, ["sku principal do produto", "sku principal", "sku"]));
+      setSkuCol(guessHeader(h, ["sku de referência", "sku de referencia", "sku principal", "sku"]));
     } catch (e) {
       setError(errorMessage(e, "Não consegui ler esse arquivo."));
     }
@@ -82,8 +82,9 @@ function SkuImport() {
   return (
     <div>
       <p className="muted">
-        Suba o modelo <strong>&quot;Informações básicas&quot;</strong> exportado em Editar em Massa → Baixar,
-        na Shopee. Vou casar cada produto pelo nome e preencher o SKU no sistema.
+        Suba o modelo <strong>&quot;Informações básicas&quot;</strong> exportado em Editar em Massa
+        → Baixar, na Shopee (arquivo <code>mass_update_basic_info...</code>). Vou casar cada produto
+        pelo nome e preencher o SKU no sistema.
       </p>
       {error && <div className="error">{error}</div>}
       <div className="field">
@@ -233,8 +234,8 @@ function MediaImport() {
   return (
     <div>
       <p className="muted">
-        Suba o modelo <strong>&quot;Informações de Mídia&quot;</strong> exportado da Shopee. As fotos ficam
-        linkadas direto do link da Shopee — não ocupam espaço no seu armazenamento.
+        Suba o modelo <strong>&quot;Informações de Mídia&quot;</strong> exportado da Shopee. As
+        fotos ficam linkadas direto do link da Shopee — não ocupam espaço no seu armazenamento.
       </p>
       {error && <div className="error">{error}</div>}
       <div className="field">
@@ -308,8 +309,151 @@ function MediaImport() {
   );
 }
 
+function PriceImport() {
+  const r = useRouter();
+  const ref = useRef<HTMLInputElement>(null);
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [rows, setRows] = useState<SheetRow[]>([]);
+  const [nameCol, setNameCol] = useState("");
+  const [priceCol, setPriceCol] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ updated: number; notFound: string[] } | null>(null);
+
+  async function handleFile(f: File) {
+    setError("");
+    setResult(null);
+    try {
+      const { headers: h, rows: r } = await parseSpreadsheet(f);
+      setHeaders(h);
+      setRows(r);
+      setNameCol(guessHeader(h, ["nome do produto", "product name"]));
+      setPriceCol(guessHeader(h, ["preço", "preco", "price"]));
+    } catch (e) {
+      setError(errorMessage(e, "Não consegui ler esse arquivo."));
+    }
+  }
+
+  async function submit() {
+    if (!nameCol || !priceCol) return setError("Selecione as duas colunas antes de importar.");
+    setBusy(true);
+    setError("");
+    try {
+      // O relatório de vendas tem uma linha por variação — quando o produto
+      // tem mais de um preço (cores/tamanhos diferentes), uso o menor valor
+      // encontrado, igual ao "a partir de R$X" que a Shopee mostra na vitrine.
+      const lowest = new Map<string, number>();
+      for (const row of rows) {
+        const name = String(row[nameCol] || "").trim();
+        const price = Number(
+          String(row[priceCol])
+            .replace(/[^\d.,-]/g, "")
+            .replace(",", ".")
+        );
+        if (!name || !(price > 0)) continue;
+        const current = lowest.get(name);
+        if (current === undefined || price < current) lowest.set(name, price);
+      }
+      const payload = [...lowest.entries()].map(([product_name, price]) => ({
+        product_name,
+        price,
+      }));
+      const res = await fetch("/api/products/import-price", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows: payload }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Erro ao importar.");
+      setResult(j);
+      r.refresh();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <p className="muted">
+        Suba o modelo &quot;Informações de vendas&quot; da Shopee. Quando o produto tem mais de um
+        preço (variações), uso o menor valor anunciado.
+      </p>
+      {error && <div className="error">{error}</div>}
+      <div className="field">
+        <input
+          ref={ref}
+          className="input"
+          type="file"
+          accept=".csv,.xlsx,.xls"
+          onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+        />
+      </div>
+      {headers.length > 0 && (
+        <>
+          <div className="form-grid">
+            <div className="field">
+              <label>Coluna com o nome do produto</label>
+              <select
+                className="select"
+                value={nameCol}
+                onChange={(e) => setNameCol(e.target.value)}
+              >
+                <option value="">Selecione</option>
+                {headers.map((h) => (
+                  <option key={h} value={h}>
+                    {h}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>Coluna com o preço</label>
+              <select
+                className="select"
+                value={priceCol}
+                onChange={(e) => setPriceCol(e.target.value)}
+              >
+                <option value="">Selecione</option>
+                {headers.map((h) => (
+                  <option key={h} value={h}>
+                    {h}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <button className="btn btn-primary" onClick={submit} disabled={busy}>
+            {busy ? "Importando..." : `Importar preço (${rows.length} linhas na planilha)`}
+          </button>
+        </>
+      )}
+      {result && (
+        <div style={{ marginTop: 12 }}>
+          <p>
+            ✅ <strong>{result.updated}</strong> produto(s) com preço atualizado.
+          </p>
+          {result.notFound.length > 0 && (
+            <>
+              <p className="muted">Não encontrados/ignorados ({result.notFound.length}):</p>
+              <ul>
+                {result.notFound.map((n, i) => (
+                  <li key={i} className="muted">
+                    {n}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CatalogImport() {
-  const [tab, setTab] = useState<"sku" | "media">("sku");
+  const [tab, setTab] = useState<"sku" | "media" | "price">("sku");
   return (
     <div className="card">
       <div className="section-title">
@@ -330,8 +474,17 @@ export function CatalogImport() {
         >
           Fotos
         </button>
+        <button
+          type="button"
+          className={`page-tab ${tab === "price" ? "page-tab-active" : ""}`}
+          onClick={() => setTab("price")}
+        >
+          Preço
+        </button>
       </div>
-      <div className="page-tab-panel">{tab === "sku" ? <SkuImport /> : <MediaImport />}</div>
+      <div className="page-tab-panel">
+        {tab === "sku" ? <SkuImport /> : tab === "media" ? <MediaImport /> : <PriceImport />}
+      </div>
     </div>
   );
 }
