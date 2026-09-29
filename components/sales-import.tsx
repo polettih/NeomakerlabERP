@@ -1,8 +1,8 @@
 "use client";
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import * as XLSX from "xlsx";
 import { errorMessage } from "@/lib/errors";
+import { parseSpreadsheet } from "@/lib/parse-spreadsheet";
 
 type Product = { id: string; name: string; sku: string | null };
 type Channel = { id: string; name: string; active: boolean };
@@ -10,6 +10,7 @@ type Channel = { id: string; name: string; active: boolean };
 const FIELD_DEFS = [
   { key: "order_number", label: "Nº do pedido", required: false },
   { key: "order_date", label: "Data do pedido", required: false },
+  { key: "status", label: "Status do pedido", required: false },
   { key: "sku", label: "SKU", required: false },
   { key: "product_name", label: "Nome do produto", required: true },
   { key: "quantity", label: "Quantidade", required: true },
@@ -36,13 +37,22 @@ const GUESSES: Record<FieldKey, string[]> = {
     "data do pedido",
     "order date",
   ],
+  status: ["status do pedido", "order status", "status"],
+  // A Shopee exporta DUAS colunas de SKU no relatório de pedidos: o SKU
+  // principal do produto ("Nº de referência do SKU principal") e o SKU da
+  // variação específica vendida ("Número de referência SKU"). Como cada
+  // produto no sistema tem um único SKU (não um por variação/cor), e a coluna
+  // de variação costuma vir vazia na maioria das linhas, o SKU principal tem
+  // que ser tentado primeiro — senão a maioria das linhas não casa com nada.
   sku: [
-    "número de referência sku",
-    "numero de referencia sku",
-    "nº de referência sku",
+    "nº de referência do sku principal",
+    "no de referência do sku principal",
+    "sku principal",
     "sku de referência",
     "sku de referencia",
     "sku pai",
+    "número de referência sku",
+    "numero de referencia sku",
     "sku do produto",
     "sku",
   ],
@@ -74,9 +84,7 @@ const GUESSES: Record<FieldKey, string[]> = {
 function parseBrazilianDate(raw: string): Date | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
-  const m = trimmed.match(
-    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/
-  );
+  const m = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
   if (m) {
     const [, d, mo, y, h = "0", mi = "0", s = "0"] = m;
     const dt = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s));
@@ -115,12 +123,19 @@ type ParsedRow = Record<string, string>;
 type MatchedRow = {
   order_number: string;
   order_date: string;
+  status: string;
   product_name: string;
   quantity: number;
   item_total: number;
   shipping: number;
   product_id: string | null;
 };
+
+const CANCELLED_MARKERS = ["cancelad", "reembols", "devolv", "recusad"];
+function isCancelledStatus(status: string) {
+  const n = normalize(status);
+  return CANCELLED_MARKERS.some((m) => n.includes(m));
+}
 
 export function SalesImport({ products, channels }: { products: Product[]; channels: Channel[] }) {
   const r = useRouter();
@@ -131,12 +146,14 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
   const [mapping, setMapping] = useState<Record<FieldKey, string>>({
     order_number: "",
     order_date: "",
+    status: "",
     sku: "",
     product_name: "",
     quantity: "",
     item_total: "",
     shipping: "",
   });
+  const [skipCancelled, setSkipCancelled] = useState(true);
   const [channelId, setChannelId] = useState(channels.find((c) => c.active)?.id || "");
   const [markAsDelivered, setMarkAsDelivered] = useState(true);
   const [error, setError] = useState("");
@@ -151,12 +168,7 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
   async function handleFile(f: File) {
     setError("");
     try {
-      const buf = await f.arrayBuffer();
-      const wb = XLSX.read(buf, { type: "array" });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json<ParsedRow>(sheet, { defval: "" });
-      if (!rows.length) throw new Error("A planilha está vazia ou não pôde ser lida.");
-      const hdrs = Object.keys(rows[0]);
+      const { headers: hdrs, rows } = await parseSpreadsheet(f);
       setHeaders(hdrs);
       setRawRows(rows);
       const guessed = {} as Record<FieldKey, string>;
@@ -191,6 +203,7 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
         ? String(row[mapping.order_number] ?? "").trim()
         : "";
       const orderDateRaw = mapping.order_date ? String(row[mapping.order_date] ?? "").trim() : "";
+      const status = mapping.status ? String(row[mapping.status] ?? "").trim() : "";
       let productId: string | null = manualPick[idx] || null;
       if (!productId && sku) {
         const bySku = products.find((p) => p.sku && normalize(p.sku) === normalize(sku));
@@ -203,6 +216,7 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
       return {
         order_number: orderNumber,
         order_date: orderDateRaw,
+        status,
         product_name: productName,
         quantity: qty,
         item_total: total,
@@ -212,7 +226,10 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
     });
   }, [rawRows, mapping, products, manualPick, step]);
 
-  const unmatchedCount = matched.filter((m) => !m.product_id).length;
+  const cancelledCount = matched.filter((m) => skipCancelled && isCancelledStatus(m.status)).length;
+  const unmatchedCount = matched.filter(
+    (m) => !m.product_id && !(skipCancelled && isCancelledStatus(m.status))
+  ).length;
   const missingRequired = FIELD_DEFS.filter((f) => f.required && !mapping[f.key]);
 
   function goPreview() {
@@ -239,6 +256,7 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
       >();
       matched.forEach((m) => {
         if (!m.product_id) return;
+        if (skipCancelled && isCancelledStatus(m.status)) return;
         const key = m.order_number || `__row_${groups.size}_${Math.random()}`;
         const unitPrice = m.item_total / m.quantity;
         if (!groups.has(key)) {
@@ -376,6 +394,16 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
             O valor de cada linha é tratado como o preço que aparece no anúncio (a taxa do canal é
             descontada dele, não somada) — igual ao lançamento manual de pedido.
           </p>
+          {mapping.status && (
+            <label className="check-row" style={{ margin: "8px 0" }}>
+              <input
+                type="checkbox"
+                checked={skipCancelled}
+                onChange={(e) => setSkipCancelled(e.target.checked)}
+              />{" "}
+              Ignorar pedidos cancelados, recusados ou devolvidos
+            </label>
+          )}
           <button className="btn btn-primary" onClick={goPreview}>
             Ver prévia ({rawRows.length} linhas)
           </button>
@@ -386,6 +414,9 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
         <>
           <p className="muted">
             {matched.length} linhas lidas
+            {cancelledCount > 0 && (
+              <span className="muted"> — {cancelledCount} cancelada(s)/devolvida(s) ignoradas</span>
+            )}
             {unmatchedCount > 0 && (
               <span style={{ color: "#f87171" }}>
                 {" "}
@@ -400,6 +431,7 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
               <thead>
                 <tr>
                   <th>Pedido</th>
+                  {mapping.status && <th>Status</th>}
                   <th>Produto na planilha</th>
                   <th>Produto no sistema</th>
                   <th>Qtd</th>
@@ -407,39 +439,54 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
                 </tr>
               </thead>
               <tbody>
-                {matched.map((m, idx) => (
-                  <tr
-                    key={idx}
-                    style={!m.product_id ? { background: "rgba(248,113,113,0.08)" } : {}}
-                  >
-                    <td>{m.order_number || "—"}</td>
-                    <td>{m.product_name}</td>
-                    <td>
-                      {m.product_id ? (
-                        products.find((p) => p.id === m.product_id)?.name
-                      ) : (
-                        <select
-                          className="select"
-                          value={manualPick[idx] || ""}
-                          onChange={(e) =>
-                            setManualPick((mp) => ({ ...mp, [idx]: e.target.value }))
-                          }
-                        >
-                          <option value="">Não encontrado — escolher...</option>
-                          {products.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                    </td>
-                    <td>{m.quantity}</td>
-                    <td>
-                      {m.item_total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                    </td>
-                  </tr>
-                ))}
+                {matched.map((m, idx) => {
+                  const cancelled = skipCancelled && isCancelledStatus(m.status);
+                  return (
+                    <tr
+                      key={idx}
+                      style={
+                        cancelled
+                          ? { opacity: 0.5 }
+                          : !m.product_id
+                            ? { background: "rgba(248,113,113,0.08)" }
+                            : {}
+                      }
+                    >
+                      <td>{m.order_number || "—"}</td>
+                      {mapping.status && <td>{m.status}</td>}
+                      <td>{m.product_name}</td>
+                      <td>
+                        {cancelled ? (
+                          <span className="muted">Ignorado (cancelado/devolvido)</span>
+                        ) : m.product_id ? (
+                          products.find((p) => p.id === m.product_id)?.name
+                        ) : (
+                          <select
+                            className="select"
+                            value={manualPick[idx] || ""}
+                            onChange={(e) =>
+                              setManualPick((mp) => ({ ...mp, [idx]: e.target.value }))
+                            }
+                          >
+                            <option value="">Não encontrado — escolher...</option>
+                            {products.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </td>
+                      <td>{m.quantity}</td>
+                      <td>
+                        {m.item_total.toLocaleString("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        })}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -451,7 +498,7 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
           >
             {busy
               ? "Importando..."
-              : `Importar ${matched.filter((m) => m.product_id).length} linhas`}
+              : `Importar ${matched.filter((m) => m.product_id && !(skipCancelled && isCancelledStatus(m.status))).length} linhas`}
           </button>
         </>
       )}
