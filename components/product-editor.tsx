@@ -6,6 +6,7 @@ import { money, n } from "@/lib/format";
 import { errorMessage } from "@/lib/errors";
 import { HoursMinutesInput } from "@/components/hours-minutes-input";
 const cats = ["Bonecos", "Objetos", "Miniaturas", "Decoração", "Outros"];
+const isWeight = (u: string) => ["kg", "g", "grama", "gramas"].includes(u.toLowerCase());
 const costOf = (m: Material | undefined, q: number) => {
   if (!m) return 0;
   return (m.unit || "").toLowerCase() === "kg"
@@ -78,6 +79,9 @@ export function ProductEditor({
     [resinPickId, setResinPickId] = useState(""),
     [resinPickQty, setResinPickQty] = useState("0"),
     [extraLinks, setExtraLinks] = useState<ExtraLink[]>([]),
+    [extraMaterialId, setExtraMaterialId] = useState(""),
+    [extraQty, setExtraQty] = useState("0"),
+    [extraSearch, setExtraSearch] = useState(""),
     [paintingHours, setPaintingHours] = useState("0"),
     [finishingHours, setFinishingHours] = useState("0"),
     [paintingMaterials, setPaintingMaterials] = useState("0"),
@@ -172,6 +176,9 @@ export function ProductEditor({
       setFdmPickQty("0");
       setResinPickId("");
       setResinPickQty("0");
+      setExtraMaterialId("");
+      setExtraQty("0");
+      setExtraSearch("");
       setExtraLinks(
         links
           .filter((x: ExtraLink) => !["fdm", "resin"].includes(x.usage_type))
@@ -224,6 +231,23 @@ export function ProductEditor({
   }
   function removeResinItem(materialId: string) {
     setResinItems((x) => x.filter((a) => a.material_id !== materialId));
+  }
+  function addExtra() {
+    if (!extraMaterialId || Number(extraQty) <= 0) return;
+    setExtraLinks((x) => [
+      ...x.filter((a) => a.material_id !== extraMaterialId),
+      {
+        material_id: extraMaterialId,
+        quantity: Number(extraQty),
+        usage_type: "other",
+        displayQty: Number(extraQty),
+      },
+    ]);
+    setExtraMaterialId("");
+    setExtraQty("0");
+  }
+  function removeExtra(materialId: string) {
+    setExtraLinks((x) => x.filter((a) => a.material_id !== materialId));
   }
   async function save() {
     setBusy(true);
@@ -687,6 +711,100 @@ export function ProductEditor({
                         </table>
                       )}
                     </>
+                  )}
+                </div>
+                <div className="material-block">
+                  <strong style={{ display: "block", marginBottom: 12 }}>
+                    🧴 Outros insumos (embalagem, tinta, acessórios...)
+                  </strong>
+                  <div className="form-grid">
+                    <Field label="Buscar insumo">
+                      <input
+                        className="input"
+                        placeholder="Digite pra filtrar a lista abaixo"
+                        value={extraSearch}
+                        onChange={(e) => setExtraSearch(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Insumo">
+                      <select
+                        className="select"
+                        value={extraMaterialId}
+                        onChange={(e) => setExtraMaterialId(e.target.value)}
+                      >
+                        <option value="">Selecione</option>
+                        {materials
+                          .filter((m) => m.category === "Insumos")
+                          .filter((m) =>
+                            (m.name + " " + (m.color_name || ""))
+                              .toLowerCase()
+                              .includes(extraSearch.trim().toLowerCase())
+                          )
+                          .map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name} {m.color_name ? `— ${m.color_name}` : ""} —{" "}
+                              {money(Number(m.average_cost))}/{m.unit}
+                            </option>
+                          ))}
+                      </select>
+                    </Field>
+                    <Field
+                      label={
+                        isWeight(materials.find((m) => m.id === extraMaterialId)?.unit || "")
+                          ? "Quantidade (g)"
+                          : "Quantidade"
+                      }
+                    >
+                      <input
+                        className="input"
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        value={extraQty}
+                        onChange={(e) => setExtraQty(e.target.value)}
+                      />
+                    </Field>
+                    <Field label="&nbsp;">
+                      <button type="button" className="btn btn-secondary" onClick={addExtra}>
+                        Adicionar insumo
+                      </button>
+                    </Field>
+                  </div>
+                  {extraLinks.length > 0 && (
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Insumo</th>
+                          <th>Quantidade</th>
+                          <th>Custo</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {extraLinks.map((x) => {
+                          const m = materials.find((a) => a.id === x.material_id);
+                          const q = Number(x.displayQty ?? x.quantity);
+                          return (
+                            <tr key={x.material_id}>
+                              <td>{m?.name}</td>
+                              <td>
+                                {q} {isWeight(m?.unit || "") ? "g" : m?.unit}
+                              </td>
+                              <td>{money(costOf(m, q))}</td>
+                              <td>
+                                <button
+                                  type="button"
+                                  className="btn btn-danger btn-sm"
+                                  onClick={() => removeExtra(x.material_id)}
+                                >
+                                  Remover
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   )}
                 </div>
                 <div className="section-title">
