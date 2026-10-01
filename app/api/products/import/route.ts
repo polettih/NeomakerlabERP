@@ -25,11 +25,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) throw new Error("Sessão expirada.");
-
     let created = 0;
     const errors: { name: string; reason: string }[] = [];
 
@@ -65,38 +60,29 @@ export async function POST(request: Request) {
           .single();
         if (pe) throw pe;
 
+        // Não baixamos e reenviamos a foto pro nosso storage — isso, multiplicado
+        // por até 8 fotos vezes dezenas de produtos numa importação só, estourava
+        // o tempo limite da função e travava o lote inteiro no meio do caminho
+        // (geralmente já no primeiro produto). Usamos o link direto da Shopee, do
+        // mesmo jeito que o importador de mídia do catálogo já faz.
         const urls = (item.images ?? []).slice(0, MAX_IMAGES_PER_PRODUCT);
-        let sortOrder = 0;
-        for (const url of urls) {
-          try {
-            const imgRes = await fetch(url);
-            if (!imgRes.ok) continue;
-            const contentType = imgRes.headers.get("content-type") || "image/jpeg";
-            const ext = contentType.includes("png")
-              ? "png"
-              : contentType.includes("webp")
-                ? "webp"
-                : "jpg";
-            const buf = new Uint8Array(await imgRes.arrayBuffer());
-            const path = `${user.id}/${product.id}/${crypto.randomUUID()}.${ext}`;
-            const up = await supabase.storage
-              .from("product-images")
-              .upload(path, buf, { contentType });
-            if (up.error) continue;
-            const { data: pub } = supabase.storage.from("product-images").getPublicUrl(path);
-            await supabase.from("product_images").insert({
-              product_id: product.id,
-              storage_path: path,
-              public_url: pub.publicUrl,
-              sort_order: sortOrder++,
-            });
-          } catch {
-            // Uma imagem que falha não derruba o produto inteiro — só fica sem essa foto.
-          }
+        if (urls.length) {
+          const rows = urls.map((url, idx) => ({
+            product_id: product.id,
+            organization_id: organizationId,
+            storage_path: `external:${url}`,
+            public_url: url,
+            sort_order: idx,
+          }));
+          const { error: ie } = await supabase.from("product_images").insert(rows);
+          if (ie) throw ie;
         }
         created++;
       } catch (e) {
-        errors.push({ name: item.name || item.shopee_id, reason: errorMessage(e, "Erro ao importar.") });
+        errors.push({
+          name: item.name || item.shopee_id,
+          reason: errorMessage(e, "Erro ao importar."),
+        });
       }
     }
 
