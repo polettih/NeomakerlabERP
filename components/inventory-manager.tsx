@@ -3,6 +3,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money, n } from "@/lib/format";
 import { errorMessage } from "@/lib/errors";
+import { MaterialPicker } from "@/components/material-picker";
 type Material = {
   id: string;
   name: string;
@@ -17,8 +18,24 @@ type Material = {
   color_hex?: string;
   active?: boolean;
 };
+type Purchase = {
+  id: string;
+  material_id: string;
+  quantity: number;
+  total_cost: number;
+  supplier: string | null;
+  notes: string | null;
+  purchased_at: string;
+  materials: { name: string; unit: string; color_name: string | null }[] | null;
+};
 const typeUnit = (t: string) => (t === "Filamento" ? "g" : t === "Resina" ? "ml" : "un");
-export function InventoryManager({ materials }: { materials: Material[] }) {
+export function InventoryManager({
+  materials,
+  purchases,
+}: {
+  materials: Material[];
+  purchases: Purchase[];
+}) {
   const r = useRouter();
   const empty = {
     name: "",
@@ -48,6 +65,7 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
   const [filter, setFilter] = useState("Todos");
   const [q, setQ] = useState("");
   const [onlyLow, setOnlyLow] = useState(false);
+  const [purchaseSearch, setPurchaseSearch] = useState("");
   const [error, setError] = useState("");
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -65,6 +83,23 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
   const lowStockCount = useMemo(
     () => materials.filter((m) => Number(m.quantity_on_hand) <= Number(m.minimum_stock)).length,
     [materials]
+  );
+  const filteredPurchases = useMemo(() => {
+    const term = purchaseSearch.trim().toLowerCase();
+    if (!term) return purchases;
+    return purchases.filter((p) => {
+      const mat = p.materials?.[0];
+      return (
+        (mat?.name || "").toLowerCase().includes(term) ||
+        (mat?.color_name || "").toLowerCase().includes(term) ||
+        (p.supplier || "").toLowerCase().includes(term) ||
+        (p.notes || "").toLowerCase().includes(term)
+      );
+    });
+  }, [purchases, purchaseSearch]);
+  const purchaseTotal = useMemo(
+    () => filteredPurchases.reduce((s, p) => s + n(p.total_cost), 0),
+    [filteredPurchases]
   );
   function updateForm(k: string, v: string) {
     const next = { ...form, [k]: v } as typeof form;
@@ -314,19 +349,12 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
             <h2>🛒 Registrar compra</h2>
             <div className="field">
               <label>Material</label>
-              <select
-                className="select"
-                required
+              <MaterialPicker
+                materials={materials}
                 value={purchase.material_id}
-                onChange={(e) => setPurchase({ ...purchase, material_id: e.target.value })}
-              >
-                {materials.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                    {m.color_name ? ` — ${m.color_name}` : ""}
-                  </option>
-                ))}
-              </select>
+                onChange={(id) => setPurchase({ ...purchase, material_id: id })}
+                placeholder="Buscar material por nome ou cor..."
+              />
             </div>
             <div className="form-grid">
               <div className="field">
@@ -351,6 +379,26 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
                   value={purchase.total_cost}
                   onChange={(e) => setPurchase({ ...purchase, total_cost: e.target.value })}
                   required
+                />
+              </div>
+            </div>
+            <div className="form-grid">
+              <div className="field">
+                <label>Fornecedor (opcional)</label>
+                <input
+                  className="input"
+                  value={purchase.supplier}
+                  onChange={(e) => setPurchase({ ...purchase, supplier: e.target.value })}
+                  placeholder="Ex.: 3D Lab, Creality Store..."
+                />
+              </div>
+              <div className="field">
+                <label>Observações (opcional)</label>
+                <input
+                  className="input"
+                  value={purchase.notes}
+                  onChange={(e) => setPurchase({ ...purchase, notes: e.target.value })}
+                  placeholder="Nota fiscal, promoção, lote..."
                 />
               </div>
             </div>
@@ -387,22 +435,17 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
             </div>
             <div className="field">
               <label>Material</label>
-              <select
-                className="select"
-                required
+              <MaterialPicker
+                materials={materials}
                 value={use.material_id}
-                onChange={(e) => setUse({ ...use, material_id: e.target.value })}
-              >
-                {materials.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                    {m.color_name ? ` — ${m.color_name}` : ""}
-                  </option>
-                ))}
-              </select>
+                onChange={(id) => setUse({ ...use, material_id: id })}
+                placeholder="Buscar material por nome ou cor..."
+              />
             </div>
             <div className="field">
-              <label>{use.direction === "out" ? "Quantidade consumida" : "Quantidade a adicionar"}</label>
+              <label>
+                {use.direction === "out" ? "Quantidade consumida" : "Quantidade a adicionar"}
+              </label>
               <input
                 className="input"
                 type="number"
@@ -508,6 +551,66 @@ export function InventoryManager({ materials }: { materials: Material[] }) {
               <tr>
                 <td colSpan={8} className="muted">
                   Nenhum material cadastrado.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="card table-wrap">
+        <div className="section-title">
+          <div>
+            <h2>Histórico de compras</h2>
+            <p className="muted">
+              {filteredPurchases.length} compra{filteredPurchases.length === 1 ? "" : "s"} ·{" "}
+              {money(purchaseTotal)} no total
+            </p>
+          </div>
+          <input
+            className="input"
+            placeholder="Buscar por material, fornecedor ou observação"
+            value={purchaseSearch}
+            onChange={(e) => setPurchaseSearch(e.target.value)}
+            style={{ maxWidth: 280 }}
+          />
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Material</th>
+              <th>Quantidade</th>
+              <th>Valor pago</th>
+              <th>Custo/un</th>
+              <th>Fornecedor</th>
+              <th>Observações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredPurchases.map((p) => {
+              const mat = p.materials?.[0];
+              return (
+                <tr key={p.id}>
+                  <td>{new Date(p.purchased_at).toLocaleDateString("pt-BR")}</td>
+                  <td>
+                    {mat?.name || "—"}
+                    {mat?.color_name ? ` — ${mat.color_name}` : ""}
+                  </td>
+                  <td>
+                    {n(p.quantity).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}{" "}
+                    {mat?.unit || ""}
+                  </td>
+                  <td>{money(n(p.total_cost))}</td>
+                  <td>{money(p.quantity > 0 ? n(p.total_cost) / n(p.quantity) : 0)}</td>
+                  <td>{p.supplier || "-"}</td>
+                  <td className="muted">{p.notes || "-"}</td>
+                </tr>
+              );
+            })}
+            {!filteredPurchases.length && (
+              <tr>
+                <td colSpan={7} className="muted">
+                  Nenhuma compra registrada ainda.
                 </td>
               </tr>
             )}

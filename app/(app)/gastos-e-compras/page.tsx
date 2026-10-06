@@ -10,21 +10,36 @@ import type { Expense } from "@/lib/types";
 
 export default async function GastosPage() {
   const { supabase, organizationId } = await requireUser();
-  const [{ data: materials }, { data: expenses }, { totals }] = await Promise.all([
-    supabase.from("materials").select("*").eq("active", true).order("material_type").order("name"),
-    supabase
-      .from("expenses")
-      .select(
-        "id,description,category,amount,status,due_date,paid_at,created_at,source_type,source_id"
-      )
-      .order("due_date", { ascending: false, nullsFirst: false }),
-    // Mesma fonte usada em Início e Financeiro — os cards abaixo usam exatamente os
-    // mesmos números de "saídas" e "despesas em aberto" que aparecem lá.
-    getFinanceSummary(supabase, organizationId),
-  ]);
+  const [{ data: materials }, { data: expenses }, { data: purchases }, { totals }] =
+    await Promise.all([
+      supabase
+        .from("materials")
+        .select("*")
+        .eq("active", true)
+        .order("material_type")
+        .order("name"),
+      supabase
+        .from("expenses")
+        .select(
+          "id,description,category,amount,status,due_date,paid_at,created_at,source_type,source_id"
+        )
+        .order("due_date", { ascending: false, nullsFirst: false }),
+      supabase
+        .from("material_purchases")
+        .select(
+          "id,material_id,quantity,total_cost,supplier,notes,purchased_at,materials(name,unit,color_name)"
+        )
+        .order("purchased_at", { ascending: false })
+        .limit(200),
+      // Mesma fonte usada em Início e Financeiro — os cards abaixo usam exatamente os
+      // mesmos números de "saídas" e "despesas em aberto" que aparecem lá.
+      getFinanceSummary(supabase, organizationId),
+    ]);
   const stockValue = (materials ?? []).reduce(
-    (sum: number, m: { quantity_on_hand?: number | string | null; average_cost?: number | string | null }) =>
-      sum + n(m.quantity_on_hand) * n(m.average_cost),
+    (
+      sum: number,
+      m: { quantity_on_hand?: number | string | null; average_cost?: number | string | null }
+    ) => sum + n(m.quantity_on_hand) * n(m.average_cost),
     0
   );
   return (
@@ -65,7 +80,7 @@ export default async function GastosPage() {
           {
             id: "estoque",
             label: "📦 Estoque de materiais",
-            content: <InventoryManager materials={materials ?? []} />,
+            content: <InventoryManager materials={materials ?? []} purchases={purchases ?? []} />,
           },
           {
             id: "despesas",
