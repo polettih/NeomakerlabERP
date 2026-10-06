@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { money, n } from "@/lib/format";
 import { errorMessage } from "@/lib/errors";
 import { HoursMinutesInput } from "@/components/hours-minutes-input";
+import { MaterialPicker } from "@/components/material-picker";
 const cats = ["Bonecos", "Objetos", "Miniaturas", "Decoração", "Outros"];
 const isWeight = (u: string) => ["kg", "g", "grama", "gramas"].includes(u.toLowerCase());
 const costOf = (m: Material | undefined, q: number) => {
@@ -58,6 +59,9 @@ export function ProductEditor({
 }) {
   const r = useRouter();
   const ref = useRef<HTMLInputElement>(null);
+  const fdmQtyRef = useRef<HTMLInputElement>(null);
+  const resinQtyRef = useRef<HTMLInputElement>(null);
+  const extraQtyRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false),
     [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(false),
@@ -81,7 +85,6 @@ export function ProductEditor({
     [extraLinks, setExtraLinks] = useState<ExtraLink[]>([]),
     [extraMaterialId, setExtraMaterialId] = useState(""),
     [extraQty, setExtraQty] = useState("0"),
-    [extraSearch, setExtraSearch] = useState(""),
     [paintingHours, setPaintingHours] = useState("0"),
     [finishingHours, setFinishingHours] = useState("0"),
     [paintingMaterials, setPaintingMaterials] = useState("0"),
@@ -178,7 +181,6 @@ export function ProductEditor({
       setResinPickQty("0");
       setExtraMaterialId("");
       setExtraQty("0");
-      setExtraSearch("");
       setExtraLinks(
         links
           .filter((x: ExtraLink) => !["fdm", "resin"].includes(x.usage_type))
@@ -526,33 +528,30 @@ export function ProductEditor({
                       </div>
                       <div className="form-grid" style={{ marginTop: 8 }}>
                         <Field label="Filamento">
-                          <select
-                            className="select"
+                          <MaterialPicker
+                            materials={fdmMaterials}
                             value={fdmPickId}
-                            onChange={(e) => setFdmPickId(e.target.value)}
-                          >
-                            <option value="">Selecione</option>
-                            {fdmMaterials.length === 0 && (
-                              <option value="" disabled>
-                                Nenhum filamento cadastrado em Estoque
-                              </option>
-                            )}
-                            {fdmMaterials.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.name} {m.color_name ? `— ${m.color_name}` : ""} —{" "}
-                                {money(Number(m.average_cost))}/{m.unit}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={setFdmPickId}
+                            placeholder="Buscar filamento por nome ou cor..."
+                            emptyLabel="Nenhum filamento cadastrado em Estoque"
+                            onEnterWithSelection={() => fdmQtyRef.current?.focus()}
+                          />
                         </Field>
                         <Field label="Quantidade (g)">
                           <input
+                            ref={fdmQtyRef}
                             className="input"
                             type="number"
                             step="0.001"
                             min="0"
                             value={fdmPickQty}
                             onChange={(e) => setFdmPickQty(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                addFdmItem();
+                              }
+                            }}
                           />
                         </Field>
                         <Field label="&nbsp;">
@@ -635,33 +634,30 @@ export function ProductEditor({
                       </div>
                       <div className="form-grid" style={{ marginTop: 8 }}>
                         <Field label="Resina">
-                          <select
-                            className="select"
+                          <MaterialPicker
+                            materials={resinMaterials}
                             value={resinPickId}
-                            onChange={(e) => setResinPickId(e.target.value)}
-                          >
-                            <option value="">Selecione</option>
-                            {resinMaterials.length === 0 && (
-                              <option value="" disabled>
-                                Nenhuma resina cadastrada em Estoque
-                              </option>
-                            )}
-                            {resinMaterials.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.name} {m.color_name ? `— ${m.color_name}` : ""} —{" "}
-                                {money(Number(m.average_cost))}/{m.unit}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={setResinPickId}
+                            placeholder="Buscar resina por nome ou cor..."
+                            emptyLabel="Nenhuma resina cadastrada em Estoque"
+                            onEnterWithSelection={() => resinQtyRef.current?.focus()}
+                          />
                         </Field>
                         <Field label="Quantidade (ml)">
                           <input
+                            ref={resinQtyRef}
                             className="input"
                             type="number"
                             step="0.001"
                             min="0"
                             value={resinPickQty}
                             onChange={(e) => setResinPickQty(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                addResinItem();
+                              }
+                            }}
                           />
                         </Field>
                         <Field label="&nbsp;">
@@ -718,35 +714,15 @@ export function ProductEditor({
                     🧴 Outros insumos (embalagem, tinta, acessórios...)
                   </strong>
                   <div className="form-grid">
-                    <Field label="Buscar insumo">
-                      <input
-                        className="input"
-                        placeholder="Digite pra filtrar a lista abaixo"
-                        value={extraSearch}
-                        onChange={(e) => setExtraSearch(e.target.value)}
-                      />
-                    </Field>
                     <Field label="Insumo">
-                      <select
-                        className="select"
+                      <MaterialPicker
+                        materials={materials.filter((m) => m.category === "Insumos")}
                         value={extraMaterialId}
-                        onChange={(e) => setExtraMaterialId(e.target.value)}
-                      >
-                        <option value="">Selecione</option>
-                        {materials
-                          .filter((m) => m.category === "Insumos")
-                          .filter((m) =>
-                            (m.name + " " + (m.color_name || ""))
-                              .toLowerCase()
-                              .includes(extraSearch.trim().toLowerCase())
-                          )
-                          .map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.name} {m.color_name ? `— ${m.color_name}` : ""} —{" "}
-                              {money(Number(m.average_cost))}/{m.unit}
-                            </option>
-                          ))}
-                      </select>
+                        onChange={setExtraMaterialId}
+                        placeholder="Buscar insumo por nome..."
+                        emptyLabel="Nenhum insumo cadastrado em Estoque"
+                        onEnterWithSelection={() => extraQtyRef.current?.focus()}
+                      />
                     </Field>
                     <Field
                       label={
@@ -756,12 +732,19 @@ export function ProductEditor({
                       }
                     >
                       <input
+                        ref={extraQtyRef}
                         className="input"
                         type="number"
                         min="0"
                         step="0.001"
                         value={extraQty}
                         onChange={(e) => setExtraQty(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addExtra();
+                          }
+                        }}
                       />
                     </Field>
                     <Field label="&nbsp;">
