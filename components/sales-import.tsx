@@ -10,15 +10,11 @@ type Channel = { id: string; name: string; active: boolean };
 const FIELD_DEFS = [
   { key: "order_number", label: "Nº do pedido", required: false },
   { key: "order_date", label: "Data do pedido", required: false },
-  { key: "status", label: "Status do pedido", required: false },
+  { key: "status", label: "Status do pedido", required: true },
   { key: "sku", label: "SKU", required: false },
   { key: "product_name", label: "Nome do produto", required: true },
   { key: "quantity", label: "Quantidade", required: true },
-  {
-    key: "item_total",
-    label: "Valor pago por esta linha (o que está na Shopee/TikTok)",
-    required: true,
-  },
+  { key: "item_total", label: "Valor da linha (Subtotal do produto)", required: true },
   { key: "shipping", label: "Frete (opcional)", required: false },
 ] as const;
 type FieldKey = (typeof FIELD_DEFS)[number]["key"];
@@ -38,12 +34,6 @@ const GUESSES: Record<FieldKey, string[]> = {
     "order date",
   ],
   status: ["status do pedido", "order status", "status"],
-  // A Shopee exporta DUAS colunas de SKU no relatório de pedidos: o SKU
-  // principal do produto ("Nº de referência do SKU principal") e o SKU da
-  // variação específica vendida ("Número de referência SKU"). Como cada
-  // produto no sistema tem um único SKU (não um por variação/cor), e a coluna
-  // de variação costuma vir vazia na maioria das linhas, o SKU principal tem
-  // que ser tentado primeiro — senão a maioria das linhas não casa com nada.
   sku: [
     "nº de referência do sku principal",
     "no de referência do sku principal",
@@ -58,12 +48,6 @@ const GUESSES: Record<FieldKey, string[]> = {
   ],
   product_name: ["nome do produto", "product name", "produto"],
   quantity: ["quantidade", "qtd", "quantity"],
-  // "Subtotal do produto" é o valor da linha inteira (preço × quantidade) — é isso que
-  // este campo precisa (o código divide por quantidade depois para achar o valor
-  // unitário). "Preço acordado"/"Preço original" são valores POR UNIDADE e vêm antes
-  // dele na planilha real da Shopee, então precisam ficar depois na lista de tentativas
-  // para não serem escolhidos por engano (senão o valor importado fica dividido pela
-  // quantidade duas vezes).
   item_total: [
     "subtotal do produto",
     "total do produto",
@@ -74,6 +58,39 @@ const GUESSES: Record<FieldKey, string[]> = {
     "preco acordado",
   ],
   shipping: ["frete", "taxa de envio", "shipping fee"],
+};
+
+// Colunas de taxa que a Shopee já calcula pedido a pedido — usar o valor real
+// delas é mais preciso do que recalcular por uma taxa fixa ou por faixa de
+// preço configurada manualmente, porque reflete exatamente o que a Shopee
+// cobrou NAQUELE pedido (campanhas, nível do vendedor, etc. já aplicados).
+const FEE_COLUMN_GUESSES = [
+  "taxa de comissão líquida",
+  "taxa de serviço líquida",
+  "taxa de transação",
+];
+
+// A Shopee usa vários textos de status — mapeamento direto pro status interno
+// do sistema, sem o usuário escolher nada na importação.
+const STATUS_MAP: Record<string, string> = {
+  cancelado: "cancelled",
+  "a enviar": "new",
+  "para enviar": "new",
+  processando: "new",
+  enviado: "shipped",
+  entregue: "delivered",
+  concluido: "delivered",
+};
+function mapStatus(raw: string): { status: string; known: boolean } {
+  const n = normalize(raw);
+  if (STATUS_MAP[n]) return { status: STATUS_MAP[n], known: true };
+  return { status: "new", known: false };
+}
+const STATUS_LABEL: Record<string, string> = {
+  cancelled: "Cancelado",
+  new: "A enviar",
+  shipped: "Enviado",
+  delivered: "Entregue",
 };
 
 // Relatórios brasileiros (Shopee, TikTok Shop) exportam datas como "DD/MM/AAAA HH:mm",
@@ -90,7 +107,6 @@ function parseBrazilianDate(raw: string): Date | null {
     const dt = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s));
     return Number.isNaN(dt.getTime()) ? null : dt;
   }
-  // Fallback: já pode vir em ISO (planilha com célula de data real, não texto).
   const fallback = new Date(trimmed);
   return Number.isNaN(fallback.getTime()) ? null : fallback;
 }
@@ -103,16 +119,24 @@ function normalize(s: string) {
     .trim();
 }
 
-function guessColumn(headers: string[], field: FieldKey): string {
+function parseMoney(raw: string) {
+  return (
+    Number(
+      String(raw ?? "")
+        .replace(/[^\d.,-]/g, "")
+        .replace(",", ".")
+    ) || 0
+  );
+}
+
+function guessColumn(headers: string[], candidates: string[]): string {
   const normHeaders = headers.map(normalize);
-  for (const guess of GUESSES[field]) {
+  for (const guess of candidates) {
     const idx = normHeaders.findIndex((h) => h === normalize(guess));
     if (idx >= 0) return headers[idx];
   }
-  for (const guess of GUESSES[field]) {
+  for (const guess of candidates) {
     const g = normalize(guess);
-    // Bidirecional: pega tanto "sku" dentro de "número de referência sku" quanto o
-    // inverso, porque a ordem das palavras muda de exportação pra exportação.
     const idx = normHeaders.findIndex((h) => h.includes(g) || g.includes(h));
     if (idx >= 0) return headers[idx];
   }
@@ -123,19 +147,16 @@ type ParsedRow = Record<string, string>;
 type MatchedRow = {
   order_number: string;
   order_date: string;
+  statusRaw: string;
   status: string;
+  statusKnown: boolean;
   product_name: string;
   quantity: number;
   item_total: number;
   shipping: number;
+  real_fee: number;
   product_id: string | null;
 };
-
-const CANCELLED_MARKERS = ["cancelad", "reembols", "devolv", "recusad"];
-function isCancelledStatus(status: string) {
-  const n = normalize(status);
-  return CANCELLED_MARKERS.some((m) => n.includes(m));
-}
 
 export function SalesImport({ products, channels }: { products: Product[]; channels: Channel[] }) {
   const r = useRouter();
@@ -153,9 +174,7 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
     item_total: "",
     shipping: "",
   });
-  const [skipCancelled, setSkipCancelled] = useState(true);
-  const [channelId, setChannelId] = useState(channels.find((c) => c.active)?.id || "");
-  const [markAsDelivered, setMarkAsDelivered] = useState(true);
+  const [feeColumns, setFeeColumns] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{
@@ -165,6 +184,11 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
   } | null>(null);
   const [manualPick, setManualPick] = useState<Record<number, string>>({});
 
+  // A importação é só para Shopee por enquanto — o canal é achado sozinho pelo
+  // nome cadastrado em Configurações, sem o usuário escolher nada aqui. A
+  // escolha de plataforma continua manual apenas no lançamento de pedido avulso.
+  const shopeeChannel = channels.find((c) => normalize(c.name).includes("shopee"));
+
   async function handleFile(f: File) {
     setError("");
     try {
@@ -172,12 +196,20 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
       setHeaders(hdrs);
       setRawRows(rows);
       const guessed = {} as Record<FieldKey, string>;
-      for (const fd of FIELD_DEFS) guessed[fd.key] = guessColumn(hdrs, fd.key);
+      for (const fd of FIELD_DEFS) guessed[fd.key] = guessColumn(hdrs, GUESSES[fd.key]);
       setMapping(guessed);
+      const guessedFeeCols = hdrs.filter((h) =>
+        FEE_COLUMN_GUESSES.some((g) => normalize(h) === normalize(g))
+      );
+      setFeeColumns(guessedFeeCols);
       setStep("map");
     } catch (e) {
       setError(errorMessage(e, "Não consegui ler esse arquivo. Confira se é um .csv ou .xlsx."));
     }
+  }
+
+  function toggleFeeColumn(col: string) {
+    setFeeColumns((cols) => (cols.includes(col) ? cols.filter((c) => c !== col) : [...cols, col]));
   }
 
   const matched = useMemo<MatchedRow[]>(() => {
@@ -186,24 +218,15 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
       const productName = String(row[mapping.product_name] ?? "").trim();
       const sku = mapping.sku ? String(row[mapping.sku] ?? "").trim() : "";
       const qty = Math.max(Number(row[mapping.quantity]) || 1, 1);
-      const total =
-        Number(
-          String(row[mapping.item_total])
-            .replace(/[^\d.,-]/g, "")
-            .replace(",", ".")
-        ) || 0;
-      const shipping = mapping.shipping
-        ? Number(
-            String(row[mapping.shipping])
-              .replace(/[^\d.,-]/g, "")
-              .replace(",", ".")
-          ) || 0
-        : 0;
+      const total = parseMoney(row[mapping.item_total]);
+      const shipping = mapping.shipping ? parseMoney(row[mapping.shipping]) : 0;
+      const realFee = feeColumns.reduce((s, c) => s + parseMoney(row[c]), 0);
       const orderNumber = mapping.order_number
         ? String(row[mapping.order_number] ?? "").trim()
         : "";
       const orderDateRaw = mapping.order_date ? String(row[mapping.order_date] ?? "").trim() : "";
-      const status = mapping.status ? String(row[mapping.status] ?? "").trim() : "";
+      const statusRaw = String(row[mapping.status] ?? "").trim();
+      const { status, known } = mapStatus(statusRaw);
       let productId: string | null = manualPick[idx] || null;
       if (!productId && sku) {
         const bySku = products.find((p) => p.sku && normalize(p.sku) === normalize(sku));
@@ -216,23 +239,30 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
       return {
         order_number: orderNumber,
         order_date: orderDateRaw,
+        statusRaw,
         status,
+        statusKnown: known,
         product_name: productName,
         quantity: qty,
         item_total: total,
         shipping,
+        real_fee: realFee,
         product_id: productId,
       };
     });
-  }, [rawRows, mapping, products, manualPick, step]);
+  }, [rawRows, mapping, feeColumns, products, manualPick, step]);
 
-  const cancelledCount = matched.filter((m) => skipCancelled && isCancelledStatus(m.status)).length;
-  const unmatchedCount = matched.filter(
-    (m) => !m.product_id && !(skipCancelled && isCancelledStatus(m.status))
-  ).length;
+  const unmatchedCount = matched.filter((m) => !m.product_id).length;
+  const unknownStatusCount = matched.filter((m) => !m.statusKnown).length;
   const missingRequired = FIELD_DEFS.filter((f) => f.required && !mapping[f.key]);
 
   function goPreview() {
+    if (!shopeeChannel) {
+      setError(
+        'Não achei um canal de venda chamado "Shopee" em Configurações. Crie um antes de importar, pra taxa ficar correta.'
+      );
+      return;
+    }
     if (missingRequired.length) {
       setError(`Selecione a coluna de: ${missingRequired.map((f) => f.label).join(", ")}.`);
       return;
@@ -250,13 +280,14 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
         {
           external_order_id: string | null;
           order_date: string | null;
+          status: string;
           shipping_cost: number;
+          real_fee: number;
           items: { product_id: string; quantity: number; unit_price: number }[];
         }
       >();
       matched.forEach((m) => {
         if (!m.product_id) return;
-        if (skipCancelled && isCancelledStatus(m.status)) return;
         const key = m.order_number || `__row_${groups.size}_${Math.random()}`;
         const unitPrice = m.item_total / m.quantity;
         if (!groups.has(key)) {
@@ -264,21 +295,23 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
           groups.set(key, {
             external_order_id: m.order_number || null,
             order_date: parsed ? parsed.toISOString() : null,
+            status: m.status,
             shipping_cost: 0,
+            real_fee: 0,
             items: [],
           });
         }
         const g = groups.get(key)!;
         g.shipping_cost += m.shipping;
+        g.real_fee += m.real_fee;
         g.items.push({ product_id: m.product_id, quantity: m.quantity, unit_price: unitPrice });
       });
       const res = await fetch("/api/orders/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sales_channel_id: channelId || null,
-          fee_mode: "subtract",
-          mark_as_delivered: markAsDelivered,
+          sales_channel_id: shopeeChannel!.id,
+          use_real_fee: true,
           orders: [...groups.values()],
         }),
       });
@@ -308,10 +341,11 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
     <div className="card">
       <div className="section-title">
         <div>
-          <h2>Importar vendas</h2>
+          <h2>Importar vendas da Shopee</h2>
           <p className="muted">
-            Suba o relatório de pedidos exportado da Shopee ou do TikTok Shop (.xlsx ou .csv) — o
-            sistema lê as linhas, casa com seus produtos cadastrados e cria os pedidos.
+            Suba o relatório de pedidos exportado da Shopee (.xlsx ou .csv) — o sistema lê as
+            linhas, casa com seus produtos, usa a taxa real de cada pedido e o status que já está na
+            planilha, sem precisar escolher nada.
           </p>
         </div>
         {step !== "upload" && (
@@ -361,49 +395,30 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
                 </select>
               </div>
             ))}
-            <div className="field">
-              <label>Canal de venda</label>
-              <select
-                className="select"
-                value={channelId}
-                onChange={(e) => setChannelId(e.target.value)}
-              >
-                <option value="">Nenhum (sem taxa de marketplace)</option>
-                {channels.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
+          </div>
+          <div className="field">
+            <label>Colunas de taxa real a somar (ajuste se a Shopee mudar os nomes)</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {headers
+                .filter((h) => normalize(h).includes("taxa") || normalize(h).includes("comiss"))
+                .map((h) => (
+                  <label key={h} className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={feeColumns.includes(h)}
+                      onChange={() => toggleFeeColumn(h)}
+                    />{" "}
+                    {h}
+                  </label>
                 ))}
-              </select>
-            </div>
-            <div className="field">
-              <label>Status dos pedidos importados</label>
-              <select
-                className="select"
-                value={markAsDelivered ? "delivered" : "new"}
-                onChange={(e) => setMarkAsDelivered(e.target.value === "delivered")}
-              >
-                <option value="delivered">
-                  Já entregues e pagos (relatório de vendas passadas)
-                </option>
-                <option value="new">Novos, ainda em aberto</option>
-              </select>
             </div>
           </div>
           <p className="muted">
-            O valor de cada linha é tratado como o preço que aparece no anúncio (a taxa do canal é
-            descontada dele, não somada) — igual ao lançamento manual de pedido.
+            Canal: <strong>{shopeeChannel ? shopeeChannel.name : "Shopee não encontrada"}</strong> —
+            a taxa usada é a soma das colunas marcadas acima (o valor real da Shopee pra cada
+            pedido), não uma taxa fixa configurada no sistema. O status de cada pedido é lido direto
+            da planilha.
           </p>
-          {mapping.status && (
-            <label className="check-row" style={{ margin: "8px 0" }}>
-              <input
-                type="checkbox"
-                checked={skipCancelled}
-                onChange={(e) => setSkipCancelled(e.target.checked)}
-              />{" "}
-              Ignorar pedidos cancelados, recusados ou devolvidos
-            </label>
-          )}
           <button className="btn btn-primary" onClick={goPreview}>
             Ver prévia ({rawRows.length} linhas)
           </button>
@@ -414,14 +429,17 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
         <>
           <p className="muted">
             {matched.length} linhas lidas
-            {cancelledCount > 0 && (
-              <span className="muted"> — {cancelledCount} cancelada(s)/devolvida(s) ignoradas</span>
-            )}
             {unmatchedCount > 0 && (
               <span style={{ color: "#f87171" }}>
                 {" "}
                 — {unmatchedCount} sem produto encontrado (escolha manualmente ou elas serão
                 ignoradas)
+              </span>
+            )}
+            {unknownStatusCount > 0 && (
+              <span style={{ color: "#f87171" }}>
+                {" "}
+                — {unknownStatusCount} com status não reconhecido (tratadas como &quot;A enviar&quot;)
               </span>
             )}
             .
@@ -431,62 +449,57 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
               <thead>
                 <tr>
                   <th>Pedido</th>
-                  {mapping.status && <th>Status</th>}
+                  <th>Status</th>
                   <th>Produto na planilha</th>
                   <th>Produto no sistema</th>
                   <th>Qtd</th>
                   <th>Valor</th>
+                  <th>Taxa real</th>
                 </tr>
               </thead>
               <tbody>
-                {matched.map((m, idx) => {
-                  const cancelled = skipCancelled && isCancelledStatus(m.status);
-                  return (
-                    <tr
-                      key={idx}
-                      style={
-                        cancelled
-                          ? { opacity: 0.5 }
-                          : !m.product_id
-                            ? { background: "rgba(248,113,113,0.08)" }
-                            : {}
-                      }
-                    >
-                      <td>{m.order_number || "—"}</td>
-                      {mapping.status && <td>{m.status}</td>}
-                      <td>{m.product_name}</td>
-                      <td>
-                        {cancelled ? (
-                          <span className="muted">Ignorado (cancelado/devolvido)</span>
-                        ) : m.product_id ? (
-                          products.find((p) => p.id === m.product_id)?.name
-                        ) : (
-                          <select
-                            className="select"
-                            value={manualPick[idx] || ""}
-                            onChange={(e) =>
-                              setManualPick((mp) => ({ ...mp, [idx]: e.target.value }))
-                            }
-                          >
-                            <option value="">Não encontrado — escolher...</option>
-                            {products.map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.name}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </td>
-                      <td>{m.quantity}</td>
-                      <td>
-                        {m.item_total.toLocaleString("pt-BR", {
-                          style: "currency",
-                          currency: "BRL",
-                        })}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {matched.map((m, idx) => (
+                  <tr
+                    key={idx}
+                    style={!m.product_id ? { background: "rgba(248,113,113,0.08)" } : {}}
+                  >
+                    <td>{m.order_number || "—"}</td>
+                    <td>
+                      {STATUS_LABEL[m.status]}
+                      {!m.statusKnown && (
+                        <span className="muted"> ({m.statusRaw || "vazio"}?)</span>
+                      )}
+                    </td>
+                    <td>{m.product_name}</td>
+                    <td>
+                      {m.product_id ? (
+                        products.find((p) => p.id === m.product_id)?.name
+                      ) : (
+                        <select
+                          className="select"
+                          value={manualPick[idx] || ""}
+                          onChange={(e) =>
+                            setManualPick((mp) => ({ ...mp, [idx]: e.target.value }))
+                          }
+                        >
+                          <option value="">Não encontrado — escolher...</option>
+                          {products.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </td>
+                    <td>{m.quantity}</td>
+                    <td>
+                      {m.item_total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </td>
+                    <td>
+                      {m.real_fee.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -498,7 +511,7 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
           >
             {busy
               ? "Importando..."
-              : `Importar ${matched.filter((m) => m.product_id && !(skipCancelled && isCancelledStatus(m.status))).length} linhas`}
+              : `Importar ${matched.filter((m) => m.product_id).length} linhas`}
           </button>
         </>
       )}

@@ -7,10 +7,22 @@ type ImportItem = { product_id: string; quantity: number; unit_price: number };
 type ImportOrder = {
   external_order_id: string | null;
   order_date: string | null;
+  status?: string;
   shipping_cost?: number;
   campaign_fee?: number;
+  real_fee?: number;
   items: ImportItem[];
 };
+
+const VALID_STATUSES = ["new", "shipped", "delivered", "cancelled"];
+// production_orders usa um enum diferente do de orders — esta tabela só
+// acompanha o progresso de produção, então "shipped"/"delivered" (que já
+// saíram da fábrica) caem como "concluído" ali.
+function productionStatusFor(orderStatus: string) {
+  if (orderStatus === "cancelled") return "cancelled";
+  if (orderStatus === "shipped" || orderStatus === "delivered") return "completed";
+  return "pending";
+}
 
 export async function POST(request: Request) {
   const { supabase, organizationId } = await requireUser();
@@ -26,7 +38,11 @@ export async function POST(request: Request) {
       );
 
     const feeMode = body.fee_mode === "add" ? "add" : "subtract";
-    const markAsDelivered = body.mark_as_delivered !== false;
+    // Quando a planilha já traz a taxa real cobrada em cada pedido (caso da
+    // Shopee), usamos ela direto como a taxa do pedido, em vez de recalcular
+    // por uma taxa fixa ou por faixa configurada manualmente no canal — o
+    // valor real que a própria plataforma aplicou é sempre mais preciso.
+    const useRealFee = body.use_real_fee === true;
 
     let channel: {
       fee_percent: number;
@@ -45,6 +61,10 @@ export async function POST(request: Request) {
       if (!data?.active) throw new Error("O canal selecionado está inativo.");
       channel = data;
     }
+    // Com taxa real, o cálculo por faixa/percentual do canal não entra — só a
+    // soma das colunas de taxa da planilha. O canal continua sendo salvo no
+    // pedido (pra aparecer certo nos relatórios por canal em Financeiro).
+    const channelForFeeCalc = useRealFee ? null : channel;
 
     const productIds = [...new Set(orders.flatMap((o) => o.items.map((i) => i.product_id)))];
     const { data: products, error: pe } = await supabase
@@ -94,16 +114,20 @@ export async function POST(request: Request) {
         });
         const merchandiseTotal = items.reduce((s, i) => s + i.total, 0);
         const shipping = Math.max(Number(group.shipping_cost || 0), 0);
-        const campaignFee = Math.max(Number(group.campaign_fee || 0), 0);
+        const campaignFee = useRealFee
+          ? Math.max(Number(group.real_fee || 0), 0)
+          : Math.max(Number(group.campaign_fee || 0), 0);
         const { feePercent, fixedFee, marketplaceFee, grossTotal } = calcOrderFeeAndGross({
-          channel,
+          channel: channelForFeeCalc,
           merchandiseTotal,
           shipping,
           campaignFee,
           feeMode,
         });
         const orderDate = group.order_date || new Date().toISOString();
-        const status = markAsDelivered ? "delivered" : "new";
+        const status = VALID_STATUSES.includes(group.status || "") ? group.status! : "new";
+        const isCancelled = status === "cancelled";
+        const isDelivered = status === "delivered";
         const { data: order, error: oe } = await supabase
           .from("orders")
           .insert({
@@ -111,10 +135,10 @@ export async function POST(request: Request) {
             sales_channel_id: body.sales_channel_id || null,
             external_order_id: group.external_order_id,
             status,
-            payment_status: markAsDelivered ? "paid" : "pending",
+            payment_status: isCancelled ? "cancelled" : "paid",
             order_date: orderDate,
-            completed_at: markAsDelivered ? orderDate : null,
-            delivered_at: markAsDelivered ? orderDate : null,
+            completed_at: isDelivered ? orderDate : null,
+            delivered_at: isDelivered ? orderDate : null,
             subtotal: merchandiseTotal,
             discount: 0,
             shipping_cost: shipping,
@@ -138,8 +162,8 @@ export async function POST(request: Request) {
         await supabase.from("production_orders").insert({
           organization_id: organizationId,
           order_id: order.id,
-          status: markAsDelivered ? "completed" : "pending",
-          completed_at: markAsDelivered ? orderDate : null,
+          status: productionStatusFor(status),
+          completed_at: isDelivered ? orderDate : null,
         });
         created++;
       } catch (err) {

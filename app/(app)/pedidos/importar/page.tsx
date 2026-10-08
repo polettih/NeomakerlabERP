@@ -23,8 +23,7 @@ export default async function ImportarPedidosPage() {
         <div>
           <h1>Importar vendas</h1>
           <p className="muted">
-            Traga o relatório de pedidos da Shopee ou do TikTok Shop e o sistema lança as vendas
-            automaticamente.
+            Por enquanto só Shopee — Mercado Livre e TikTok Shop vêm em seguida.
           </p>
         </div>
       </div>
