@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { errorMessage } from "@/lib/errors";
 import { calcOrderFeeAndGross } from "@/lib/order-fees";
+import { variantCost } from "@/lib/variants";
 
 type OrderMaterialInput = { material_id: string; quantity: number; usage_type?: string };
 type OrderItemInput = {
   product_id: string;
+  variant_id?: string | null;
   quantity?: number;
   unit_price?: number;
   materials?: OrderMaterialInput[];
@@ -24,9 +26,22 @@ export async function POST(request: Request) {
       .eq("organization_id", organizationId)
       .in("id", ids);
     if (pe) throw pe;
+    const variantIds = (body.items as OrderItemInput[])
+      .map((i) => i.variant_id)
+      .filter(Boolean) as string[];
+    const { data: variants, error: ve } = variantIds.length
+      ? await supabase
+          .from("product_variants")
+          .select("id,product_id,name,sale_price,units,cost_override")
+          .eq("organization_id", organizationId)
+          .in("id", variantIds)
+      : { data: [], error: null };
+    if (ve) throw ve;
     const items = (body.items as OrderItemInput[]).map((i) => {
       const p = products?.find((x) => x.id === i.product_id);
       if (!p) throw new Error("Produto inválido.");
+      const v = i.variant_id ? variants?.find((x) => x.id === i.variant_id) : undefined;
+      if (i.variant_id && (!v || v.product_id !== p.id)) throw new Error("Variação inválida.");
       const q = Math.max(Number(i.quantity || 1), 1);
       // Preço unitário desta venda: por padrão é o preço cadastrado no produto, mas o
       // formulário permite sobrescrever para refletir o valor real cobrado no anúncio
@@ -34,13 +49,17 @@ export async function POST(request: Request) {
       // vindo do produto normalmente — só o preço de venda muda por pedido.
       const rawUnitPrice = Number(i.unit_price);
       const unitPrice =
-        Number.isFinite(rawUnitPrice) && rawUnitPrice > 0 ? rawUnitPrice : Number(p.sale_price);
+        Number.isFinite(rawUnitPrice) && rawUnitPrice > 0
+          ? rawUnitPrice
+          : Number(v ? v.sale_price : p.sale_price);
       return {
         product_id: p.id,
-        product_name: p.name,
+        product_name: v ? `${p.name} — ${v.name}` : p.name,
+        variant_id: v?.id ?? null,
+        variant_name: v?.name ?? null,
         quantity: q,
         unit_price: unitPrice,
-        unit_cost: Number(p.estimated_cost),
+        unit_cost: v ? variantCost(v, Number(p.estimated_cost)) : Number(p.estimated_cost),
         discount: 0,
         total: unitPrice * q,
         // Materiais realmente consumidos nesta venda (pode ser diferente do padrão do

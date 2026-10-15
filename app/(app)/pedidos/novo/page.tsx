@@ -8,7 +8,7 @@ export default async function NovoPedidoPage() {
       supabase
         .from("products")
         .select(
-          "id,name,sale_price,estimated_cost,category,product_images(id,public_url,sort_order),product_materials(material_id,quantity,usage_type)"
+          "id,name,sale_price,estimated_cost,category,product_images(id,public_url,sort_order),product_materials(material_id,quantity,usage_type),product_variants(id,name,sku,sale_price,units,cost_override,active,sort_order)"
         )
         .eq("active", true)
         .order("name"),

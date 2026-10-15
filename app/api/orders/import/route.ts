@@ -2,8 +2,14 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { errorMessage } from "@/lib/errors";
 import { calcOrderFeeAndGross } from "@/lib/order-fees";
+import { variantCost } from "@/lib/variants";
 
-type ImportItem = { product_id: string; quantity: number; unit_price: number };
+type ImportItem = {
+  product_id: string;
+  variant_id?: string | null;
+  quantity: number;
+  unit_price: number;
+};
 type ImportOrder = {
   external_order_id: string | null;
   order_date: string | null;
@@ -74,6 +80,18 @@ export async function POST(request: Request) {
       .in("id", productIds);
     if (pe) throw pe;
     const productMap = new Map((products ?? []).map((p) => [p.id, p]));
+    const variantIds = [
+      ...new Set(orders.flatMap((o) => o.items.map((i) => i.variant_id).filter(Boolean))),
+    ] as string[];
+    const { data: variants, error: ve } = variantIds.length
+      ? await supabase
+          .from("product_variants")
+          .select("id,product_id,name,units,cost_override")
+          .eq("organization_id", organizationId)
+          .in("id", variantIds)
+      : { data: [], error: null };
+    if (ve) throw ve;
+    const variantMap = new Map((variants ?? []).map((v) => [v.id, v]));
 
     let created = 0,
       duplicates = 0;
@@ -100,14 +118,19 @@ export async function POST(request: Request) {
         const items = group.items.map((i) => {
           const p = productMap.get(i.product_id);
           if (!p) throw new Error(`Produto não encontrado (id ${i.product_id}).`);
+          const v = i.variant_id ? variantMap.get(i.variant_id) : undefined;
+          if (i.variant_id && (!v || v.product_id !== p.id))
+            throw new Error("Variação não encontrada para este produto.");
           const q = Math.max(Number(i.quantity || 1), 1);
           const unitPrice = Math.max(Number(i.unit_price || 0), 0);
           return {
             product_id: p.id,
-            product_name: p.name,
+            product_name: v ? `${p.name} — ${v.name}` : p.name,
+            variant_id: v?.id ?? null,
+            variant_name: v?.name ?? null,
             quantity: q,
             unit_price: unitPrice,
-            unit_cost: Number(p.estimated_cost),
+            unit_cost: v ? variantCost(v, Number(p.estimated_cost)) : Number(p.estimated_cost),
             discount: 0,
             total: unitPrice * q,
           };

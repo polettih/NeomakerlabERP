@@ -4,7 +4,11 @@ import { useRouter } from "next/navigation";
 import { money } from "@/lib/format";
 import { resolveFeeBand, type FeeBand } from "@/lib/fee-bands";
 
-type ProdMaterialLink = { material_id: string; quantity: number; usage_type: "fdm" | "resin" | "other" };
+type ProdMaterialLink = {
+  material_id: string;
+  quantity: number;
+  usage_type: "fdm" | "resin" | "other";
+};
 type P = {
   id: string;
   name: string;
@@ -13,6 +17,29 @@ type P = {
   category?: string;
   product_images?: { public_url: string; sort_order: number }[];
   product_materials?: ProdMaterialLink[];
+  product_variants?: PV[];
+};
+type PV = {
+  id: string;
+  name: string;
+  sku: string | null;
+  sale_price: number;
+  units: number;
+  cost_override: number | null;
+  active: boolean;
+  sort_order: number;
+};
+const activeVariants = (p?: P) =>
+  [...(p?.product_variants ?? [])]
+    .filter((v) => v.active)
+    .sort((a, b) => a.sort_order - b.sort_order);
+/** Preço e variação padrão ao escolher um produto: a 1ª variação ativa, se houver. */
+const defaultsFor = (p?: P) => {
+  const v = activeVariants(p)[0];
+  return {
+    variant_id: v?.id ?? "",
+    unit_price: v ? Number(v.sale_price) : Number(p?.sale_price ?? 0),
+  };
 };
 type Mat = {
   id: string;
@@ -23,14 +50,25 @@ type Mat = {
   unit: string;
 };
 type C = { id: string; name: string };
-type Ch = { id: string; name: string; fee_percent: number; fixed_fee: number; fee_bands: FeeBand[] };
+type Ch = {
+  id: string;
+  name: string;
+  fee_percent: number;
+  fixed_fee: number;
+  fee_bands: FeeBand[];
+};
 type Line = {
   uid: string;
   product_id: string;
+  variant_id: string;
   quantity: number;
   unit_price: number;
   priceTouched: boolean;
   overrides: Record<string, string>; // material_id original -> material_id escolhido
+};
+const defaultsForLine = (p: P | undefined, l: { variant_id: string }) => {
+  const v = activeVariants(p).find((x) => x.id === l.variant_id);
+  return Number(v ? v.sale_price : (p?.sale_price ?? 0));
 };
 const uid = () => Math.random().toString(36).slice(2);
 
@@ -54,8 +92,8 @@ export function CreateOrderForm({
           {
             uid: uid(),
             product_id: products[0].id,
+            ...defaultsFor(products[0]),
             quantity: 1,
-            unit_price: products[0].sale_price,
             priceTouched: false,
             overrides: {},
           },
@@ -78,7 +116,14 @@ export function CreateOrderForm({
     if (!p) return;
     setLines((x) => [
       ...x,
-      { uid: uid(), product_id: p.id, quantity: 1, unit_price: p.sale_price, priceTouched: false, overrides: {} },
+      {
+        uid: uid(),
+        product_id: p.id,
+        ...defaultsFor(p),
+        quantity: 1,
+        priceTouched: false,
+        overrides: {},
+      },
     ]);
   }
   function removeLine(id: string) {
@@ -89,12 +134,30 @@ export function CreateOrderForm({
   }
   function setLineProduct(id: string, productId: string) {
     const p = products.find((x) => x.id === productId);
-    updateLine(id, { product_id: productId, unit_price: p?.sale_price ?? 0, priceTouched: false, overrides: {} });
+    updateLine(id, {
+      product_id: productId,
+      ...defaultsFor(p),
+      priceTouched: false,
+      overrides: {},
+    });
+  }
+  function setLineVariant(id: string, variantId: string) {
+    const l = lines.find((x) => x.uid === id);
+    const v = activeVariants(products.find((x) => x.id === l?.product_id)).find(
+      (x) => x.id === variantId
+    );
+    updateLine(id, {
+      variant_id: variantId,
+      unit_price: Number(v?.sale_price ?? 0),
+      priceTouched: false,
+    });
   }
   function setLineOverride(id: string, originalMaterialId: string, newMaterialId: string) {
     setLines((x) =>
       x.map((l) =>
-        l.uid === id ? { ...l, overrides: { ...l.overrides, [originalMaterialId]: newMaterialId } } : l
+        l.uid === id
+          ? { ...l, overrides: { ...l.overrides, [originalMaterialId]: newMaterialId } }
+          : l
       )
     );
   }
@@ -120,6 +183,12 @@ export function CreateOrderForm({
     e.preventDefault();
     setError("");
     if (!lines.length) return setError("Adicione pelo menos um produto.");
+    if (
+      lines.some(
+        (l) => activeVariants(products.find((x) => x.id === l.product_id)).length && !l.variant_id
+      )
+    )
+      return setError("Escolha a variação de cada produto que possui variações.");
     if (lines.some((l) => !l.product_id || l.quantity <= 0 || l.unit_price <= 0))
       return setError("Confira produto, quantidade e valor de cada item do pedido.");
     if (status === "delivered" && !completedDate) {
@@ -137,6 +206,7 @@ export function CreateOrderForm({
       }));
       return {
         product_id: l.product_id,
+        variant_id: l.variant_id || null,
         quantity: l.quantity,
         unit_price: l.unit_price,
         materials: linkedMaterials,
@@ -252,7 +322,10 @@ export function CreateOrderForm({
                 >
                   {products.map((prod) => (
                     <option key={prod.id} value={prod.id}>
-                      {prod.name} — {money(Number(prod.sale_price))}
+                      {prod.name} —{" "}
+                      {activeVariants(prod).length
+                        ? `${activeVariants(prod).length} variações`
+                        : money(Number(prod.sale_price))}
                     </option>
                   ))}
                 </select>
@@ -263,6 +336,22 @@ export function CreateOrderForm({
                   </div>
                 )}
               </div>
+              {activeVariants(p).length > 0 && (
+                <div className="field">
+                  <label>Variação</label>
+                  <select
+                    className="select"
+                    value={l.variant_id}
+                    onChange={(e) => setLineVariant(l.uid, e.target.value)}
+                  >
+                    {activeVariants(p).map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name} — {money(Number(v.sale_price))}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="field">
                 <label>Quantidade</label>
                 <input
@@ -270,7 +359,9 @@ export function CreateOrderForm({
                   type="number"
                   min="1"
                   value={l.quantity}
-                  onChange={(e) => updateLine(l.uid, { quantity: Math.max(1, Number(e.target.value) || 1) })}
+                  onChange={(e) =>
+                    updateLine(l.uid, { quantity: Math.max(1, Number(e.target.value) || 1) })
+                  }
                 />
               </div>
               <div className="field">
@@ -283,14 +374,22 @@ export function CreateOrderForm({
                     min="0"
                     value={l.unit_price}
                     onChange={(e) =>
-                      updateLine(l.uid, { unit_price: Math.max(0, Number(e.target.value) || 0), priceTouched: true })
+                      updateLine(l.uid, {
+                        unit_price: Math.max(0, Number(e.target.value) || 0),
+                        priceTouched: true,
+                      })
                     }
                   />
-                  {l.priceTouched && Number(p?.sale_price) !== l.unit_price && (
+                  {l.priceTouched && defaultsForLine(p, l) !== l.unit_price && (
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"
-                      onClick={() => updateLine(l.uid, { unit_price: p?.sale_price ?? 0, priceTouched: false })}
+                      onClick={() =>
+                        updateLine(l.uid, {
+                          unit_price: defaultsForLine(p, l),
+                          priceTouched: false,
+                        })
+                      }
                       title="Voltar para o preço cadastrado no produto"
                     >
                       Padrão
@@ -300,7 +399,11 @@ export function CreateOrderForm({
               </div>
               {lines.length > 1 && (
                 <div className="field" style={{ justifyContent: "flex-end" }}>
-                  <button type="button" className="btn btn-danger btn-sm" onClick={() => removeLine(l.uid)}>
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-sm"
+                    onClick={() => removeLine(l.uid)}
+                  >
                     Remover item
                   </button>
                 </div>
@@ -314,11 +417,18 @@ export function CreateOrderForm({
                 {p.product_materials.map((m) => {
                   const original = materials.find((x) => x.id === m.material_id);
                   const chosenId = l.overrides[m.material_id] ?? m.material_id;
-                  const options = materials.filter((x) => x.material_type === original?.material_type);
+                  const options = materials.filter(
+                    (x) => x.material_type === original?.material_type
+                  );
                   return (
                     <div key={m.material_id} className="filters-row" style={{ marginBottom: 6 }}>
                       <span className="muted">
-                        {m.usage_type === "fdm" ? "Filamento" : m.usage_type === "resin" ? "Resina" : "Insumo"}:
+                        {m.usage_type === "fdm"
+                          ? "Filamento"
+                          : m.usage_type === "resin"
+                            ? "Resina"
+                            : "Insumo"}
+                        :
                       </span>
                       <select
                         className="select"
@@ -377,8 +487,8 @@ export function CreateOrderForm({
             onChange={(e) => setCampaignFee(Math.max(0, Number(e.target.value) || 0))}
           />
           <p className="muted">
-            Valor extra que o marketplace descontou por participação em campanha/cupom neste
-            pedido específico.
+            Valor extra que o marketplace descontou por participação em campanha/cupom neste pedido
+            específico.
           </p>
         </div>
         <div className="field">
@@ -417,8 +527,8 @@ export function CreateOrderForm({
             <span className="muted">
               {" "}
               (faixa {money(calc.band.min)}
-              {calc.band.max !== null ? ` – ${money(calc.band.max)}` : "+"}: {(calc.feePercent * 100).toFixed(2)}% +{" "}
-              {money(calc.fixedFee)})
+              {calc.band.max !== null ? ` – ${money(calc.band.max)}` : "+"}:{" "}
+              {(calc.feePercent * 100).toFixed(2)}% + {money(calc.fixedFee)})
             </span>
           )}
         </div>
@@ -428,10 +538,15 @@ export function CreateOrderForm({
         <div>
           Frete: <strong>{money(shipping)}</strong>
         </div>
-        <div className="grid" style={{ gridTemplateColumns: "repeat(2,1fr)", gap: 8, marginTop: 14 }}>
+        <div
+          className="grid"
+          style={{ gridTemplateColumns: "repeat(2,1fr)", gap: 8, marginTop: 14 }}
+        >
           <div>
             <div className="label">
-              {feeMode === "add" ? "Venda bruta (o que o cliente paga)" : "Valor a receber (líquido)"}
+              {feeMode === "add"
+                ? "Venda bruta (o que o cliente paga)"
+                : "Valor a receber (líquido)"}
             </div>
             <div className="value">{money(calc.gross)}</div>
           </div>
@@ -442,8 +557,8 @@ export function CreateOrderForm({
         </div>
         <p className="muted" style={{ marginTop: 8 }}>
           {feeMode === "add"
-            ? "Modo atual: a taxa soma ao valor digitado — o cliente paga esse total, e é isso que fica como \"a receber\" até você registrar o pagamento."
-            : "Modo atual: o valor digitado é o preço do anúncio; a taxa já foi descontada pelo marketplace antes de cair na sua conta — é o valor líquido que fica como \"a receber\"."}
+            ? 'Modo atual: a taxa soma ao valor digitado — o cliente paga esse total, e é isso que fica como "a receber" até você registrar o pagamento.'
+            : 'Modo atual: o valor digitado é o preço do anúncio; a taxa já foi descontada pelo marketplace antes de cair na sua conta — é o valor líquido que fica como "a receber".'}
         </p>
       </div>
 

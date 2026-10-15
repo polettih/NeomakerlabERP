@@ -6,6 +6,8 @@ import { money } from "@/lib/format";
 import { errorMessage } from "@/lib/errors";
 import { HoursMinutesInput } from "@/components/hours-minutes-input";
 import { MaterialPicker } from "@/components/material-picker";
+import { VariantsEditor, validateVariants, variantsPayload } from "@/components/variants-editor";
+import type { VariantDraft } from "@/lib/variants";
 
 const cats = ["Bonecos", "Objetos", "Miniaturas", "Decoração", "Outros"];
 type Material = {
@@ -60,6 +62,7 @@ export function CreateProductForm({
   const [name, setName] = useState("");
   const [category, setCategory] = useState("Bonecos");
   const [files, setFiles] = useState<FileList | null>(null);
+  const [variants, setVariants] = useState<VariantDraft[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const fdmMachines = machines.filter((m) => m.category === "Impressora FDM" && m.active);
@@ -169,6 +172,7 @@ export function CreateProductForm({
     setResinItems((x) => x.filter((a) => a.material_id !== materialId));
   }
   function reset() {
+    setVariants([]);
     setName("");
     setCategory("Bonecos");
     setFiles(null);
@@ -208,6 +212,8 @@ export function CreateProductForm({
     if (files && files.length > 8) return setError("Máximo de 8 fotos.");
     if (!Number.isFinite(finalPrice) || finalPrice <= 0)
       return setError("Informe um preço de venda válido.");
+    const variantError = validateVariants(variants);
+    if (variantError) return setError(variantError);
     setBusy(true);
     try {
       const res = await fetch("/api/products", {
@@ -340,6 +346,18 @@ export function CreateProductForm({
       const pj = await pr.json();
       if (!pr.ok)
         throw new Error(pj.error || "Produto criado, mas não foi possível salvar a precificação.");
+      if (variants.length) {
+        const vr = await fetch("/api/product-variants", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ product_id: productId, variants: variantsPayload(variants) }),
+        });
+        const vj = await vr.json();
+        if (!vr.ok)
+          throw new Error(
+            `Produto criado, mas as variações não foram salvas: ${vj.error || "erro"}. Edite o produto para tentar de novo.`
+          );
+      }
       reset();
       setOpen(false);
       r.refresh();
@@ -412,6 +430,15 @@ export function CreateProductForm({
               />
             </Field>
           </div>
+          <div className="section-title" style={{ marginTop: 16 }}>
+            <h3>🎨 Variações (opcional)</h3>
+          </div>
+          <VariantsEditor
+            variants={variants}
+            onChange={setVariants}
+            productCost={total}
+            basePrice={finalPrice}
+          />
           <div className="section-title" style={{ marginTop: 16 }}>
             <h3>🧵 Materiais consumidos</h3>
           </div>

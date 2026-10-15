@@ -6,6 +6,8 @@ import { money, n } from "@/lib/format";
 import { errorMessage } from "@/lib/errors";
 import { HoursMinutesInput } from "@/components/hours-minutes-input";
 import { MaterialPicker } from "@/components/material-picker";
+import { VariantsEditor, validateVariants, variantsPayload } from "@/components/variants-editor";
+import { toDraft, type Variant, type VariantDraft } from "@/lib/variants";
 const cats = ["Bonecos", "Objetos", "Miniaturas", "Decoração", "Outros"];
 const isWeight = (u: string) => ["kg", "g", "grama", "gramas"].includes(u.toLowerCase());
 const costOf = (m: Material | undefined, q: number) => {
@@ -69,7 +71,8 @@ export function ProductEditor({
   const [name, setName] = useState(product.name),
     [category, setCategory] = useState(product.category || "Bonecos"),
     [priceOverride, setPriceOverride] = useState(String(product.sale_price)),
-    [images, setImages] = useState(product.images || []);
+    [images, setImages] = useState(product.images || []),
+    [variants, setVariants] = useState<VariantDraft[]>([]);
   const [fdmEnabled, setFdmEnabled] = useState(false),
     [resinEnabled, setResinEnabled] = useState(false),
     [fdmMachineId, setFdmMachineId] = useState(""),
@@ -153,10 +156,12 @@ export function ProductEditor({
     setLoading(true);
     setError("");
     try {
-      const [pr, pm] = await Promise.all([
+      const [pr, pm, vr] = await Promise.all([
         fetch(`/api/product-pricing?product_id=${product.id}`),
         fetch(`/api/product-materials?product_id=${product.id}`),
+        fetch(`/api/product-variants?product_id=${product.id}`),
       ]);
+      if (vr.ok) setVariants(((await vr.json()) as Variant[]).map(toDraft));
       const pricing = await pr.json(),
         links = await pm.json();
       if (!pr.ok) throw new Error(pricing.error);
@@ -262,6 +267,8 @@ export function ProductEditor({
         throw new Error("Preencha impressora, horas e ao menos 1 resina.");
       if (!Number.isFinite(finalPrice) || finalPrice <= 0)
         throw new Error("Informe um preço de venda válido.");
+      const variantError = validateVariants(variants);
+      if (variantError) throw new Error(variantError);
       const res = await fetch(`/api/products/${product.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -353,6 +360,12 @@ export function ProductEditor({
         body: JSON.stringify(pricing),
       });
       if (!pp.ok) throw new Error((await pp.json()).error || "Erro ao salvar precificação.");
+      const vsave = await fetch("/api/product-variants", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_id: product.id, variants: variantsPayload(variants) }),
+      });
+      if (!vsave.ok) throw new Error((await vsave.json()).error || "Erro ao salvar variações.");
       setOpen(false);
       r.refresh();
     } catch (e) {
@@ -917,6 +930,15 @@ export function ProductEditor({
                     </p>
                   </div>
                 </div>
+                <div className="section-title" style={{ marginTop: 16 }}>
+                  <h3>🎨 Variações</h3>
+                </div>
+                <VariantsEditor
+                  variants={variants}
+                  onChange={setVariants}
+                  productCost={total}
+                  basePrice={finalPrice}
+                />
                 <div className="section-title">
                   <div>
                     <h3>📸 Fotos ({images.length}/8)</h3>

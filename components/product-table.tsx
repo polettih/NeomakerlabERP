@@ -15,6 +15,7 @@ type Product = {
   category: string | null;
   created_at: string;
   product_images: Img[] | null;
+  product_variants?: { id: string; name: string; sale_price: number; active: boolean }[] | null;
 };
 
 export function ProductTable({
@@ -48,9 +49,7 @@ export function ProductTable({
       if (status === "inactive" && p.active) return false;
       if (category !== "Todas" && (p.category || "Bonecos") !== category) return false;
       if (!term) return true;
-      return (
-        p.name.toLowerCase().includes(term) || (p.sku ?? "").toLowerCase().includes(term)
-      );
+      return p.name.toLowerCase().includes(term) || (p.sku ?? "").toLowerCase().includes(term);
     });
   }, [products, q, category, status]);
 
@@ -102,10 +101,15 @@ export function ProductTable({
         </thead>
         <tbody>
           {filtered.map((p) => {
-            const imgs = [...(p.product_images ?? [])].sort(
-              (a, b) => a.sort_order - b.sort_order
-            );
+            const imgs = [...(p.product_images ?? [])].sort((a, b) => a.sort_order - b.sort_order);
             const main = imgs[0]?.public_url;
+            const vars = (p.product_variants ?? []).filter((v) => v.active);
+            const prices = vars.map((v) => Number(v.sale_price));
+            const priceLabel = vars.length
+              ? Math.min(...prices) === Math.max(...prices)
+                ? money(prices[0])
+                : `${money(Math.min(...prices))} – ${money(Math.max(...prices))}`
+              : money(Number(p.sale_price));
             return (
               <tr key={p.id}>
                 <td>
@@ -128,9 +132,18 @@ export function ProductTable({
                     {p.active ? "Disponível" : "Inativo"}
                   </span>
                 </td>
-                <td>{money(Number(p.sale_price))}</td>
+                <td>
+                  {priceLabel}
+                  {vars.length > 0 && (
+                    <div className="muted">
+                      {vars.length} variaç{vars.length === 1 ? "ão" : "ões"}
+                    </div>
+                  )}
+                </td>
                 <td>{money(Number(p.estimated_cost))}</td>
-                <td>{money(Number(p.sale_price) - Number(p.estimated_cost))}</td>
+                <td>
+                  {vars.length ? "—" : money(Number(p.sale_price) - Number(p.estimated_cost))}
+                </td>
                 <td>
                   <div className="actions">
                     <ProductEditor

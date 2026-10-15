@@ -3,6 +3,7 @@ import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
 import { errorMessage } from "@/lib/errors";
+import { parseVariantRows, type VariantRow } from "@/lib/parse-variant-rows";
 
 type ExistingProduct = { id: string; name: string; external_ids: Record<string, string> | null };
 
@@ -39,6 +40,9 @@ export function ProductImport({ existingProducts }: { existingProducts: Existing
   const mediaRef = useRef<HTMLInputElement>(null);
   const [basicFile, setBasicFile] = useState<File | null>(null);
   const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [salesFile, setSalesFile] = useState<File | null>(null);
+  const [variantRows, setVariantRows] = useState<VariantRow[]>([]);
+  const salesRef = useRef<HTMLInputElement>(null);
   const [parsed, setParsed] = useState<ParsedProduct[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -46,6 +50,7 @@ export function ProductImport({ existingProducts }: { existingProducts: Existing
     created: number;
     linked: number;
     errors: { name: string; reason: string }[];
+    variants: number;
   } | null>(null);
 
   const linkedIds = useMemo(() => {
@@ -64,7 +69,10 @@ export function ProductImport({ existingProducts }: { existingProducts: Existing
       return;
     }
     try {
-      const [basicRows, mediaRows] = await Promise.all([readSheet(basicFile), readSheet(mediaFile)]);
+      const [basicRows, mediaRows] = await Promise.all([
+        readSheet(basicFile),
+        readSheet(mediaFile),
+      ]);
       const basicStart = findDataStart(basicRows);
       const mediaStart = findDataStart(mediaRows);
       if (basicStart < 0) throw new Error("Não encontrei dados na planilha de dados básicos.");
@@ -101,6 +109,10 @@ export function ProductImport({ existingProducts }: { existingProducts: Existing
             images,
           });
       }
+      if (salesFile) {
+        const { rows } = await parseVariantRows(salesFile);
+        setVariantRows(rows);
+      } else setVariantRows([]);
       const list = [...byId.values()].filter((p) => p.name);
       if (!list.length) throw new Error("Nenhum produto encontrado nas planilhas.");
       setParsed(list);
@@ -122,7 +134,18 @@ export function ProductImport({ existingProducts }: { existingProducts: Existing
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error || "Erro ao importar.");
-      setResult({ ...j, linked: parsed.length - toImport.length });
+      let variantsCreated = 0;
+      if (variantRows.length) {
+        const vr = await fetch("/api/products/import-variants", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rows: variantRows }),
+        });
+        const vj = await vr.json();
+        if (!vr.ok) throw new Error(`Produtos criados, mas as variações falharam: ${vj.error}`);
+        variantsCreated = vj.created ?? 0;
+      }
+      setResult({ ...j, linked: parsed.length - toImport.length, variants: variantsCreated });
       r.refresh();
     } catch (e) {
       setError(errorMessage(e));
@@ -134,11 +157,14 @@ export function ProductImport({ existingProducts }: { existingProducts: Existing
   function reset() {
     setBasicFile(null);
     setMediaFile(null);
+    setSalesFile(null);
+    setVariantRows([]);
     setParsed(null);
     setResult(null);
     setError("");
     if (basicRef.current) basicRef.current.value = "";
     if (mediaRef.current) mediaRef.current.value = "";
+    if (salesRef.current) salesRef.current.value = "";
   }
 
   const newCount = parsed ? parsed.filter((p) => !linkedIds.has(p.shopee_id)).length : 0;
@@ -150,8 +176,8 @@ export function ProductImport({ existingProducts }: { existingProducts: Existing
           <h2>Importar produtos da Shopee</h2>
           <p className="muted">
             Suba as duas planilhas de &quot;Atualização em massa&quot; exportadas do Gerenciador de
-            Produtos da Shopee (dados básicos + mídia) — o sistema junta as duas pelo ID do
-            produto e já cadastra tudo com as fotos.
+            Produtos da Shopee (dados básicos + mídia) — o sistema junta as duas pelo ID do produto
+            e já cadastra tudo com as fotos.
           </p>
         </div>
         {(parsed || result) && (
@@ -185,6 +211,16 @@ export function ProductImport({ existingProducts }: { existingProducts: Existing
                 onChange={(e) => setMediaFile(e.target.files?.[0] ?? null)}
               />
             </div>
+            <div className="field">
+              <label>Planilha de vendas/variações (mass_update_sales_info) — opcional</label>
+              <input
+                ref={salesRef}
+                className="input"
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={(e) => setSalesFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
           </div>
           <button className="btn btn-primary" onClick={parseFiles}>
             Ver prévia
@@ -201,6 +237,13 @@ export function ProductImport({ existingProducts }: { existingProducts: Existing
               <> ({parsed.length - newCount} já foram importados antes e serão ignorados)</>
             )}
             .
+            {variantRows.length > 0 && (
+              <>
+                {" "}
+                Também serão criadas <strong>{variantRows.length} variações</strong> (as que já
+                existem são mantidas).
+              </>
+            )}
           </p>
           <div style={{ maxHeight: 420, overflow: "auto" }}>
             <table>
@@ -238,14 +281,14 @@ export function ProductImport({ existingProducts }: { existingProducts: Existing
             </table>
           </div>
           <p className="muted" style={{ marginTop: 8 }}>
-            Produtos novos entram com preço de venda e custo em R$ 0,00 — a Shopee não exporta
-            essa informação, então acesse Produtos depois da importação para preencher a
-            precificação de cada um.
+            Produtos novos entram com preço de venda e custo em R$ 0,00 — a Shopee não exporta essa
+            informação, então acesse Produtos depois da importação para preencher a precificação de
+            cada um.
           </p>
           <button
             className="btn btn-primary"
             onClick={submit}
-            disabled={busy || newCount === 0}
+            disabled={busy || (newCount === 0 && variantRows.length === 0)}
             style={{ marginTop: 12 }}
           >
             {busy ? "Importando..." : `Importar ${newCount} produtos novos`}
@@ -257,6 +300,12 @@ export function ProductImport({ existingProducts }: { existingProducts: Existing
         <div>
           <p>
             ✅ <strong>{result.created}</strong> produto(s) criado(s), com fotos já anexadas.
+            {result.variants > 0 && (
+              <>
+                {" "}
+                <strong>{result.variants}</strong> variação(ões) criada(s).
+              </>
+            )}
             {result.linked > 0 && (
               <>
                 {" "}

@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { errorMessage } from "@/lib/errors";
 import { parseSpreadsheet } from "@/lib/parse-spreadsheet";
 
-type Product = { id: string; name: string; sku: string | null };
+type VariantLite = { id: string; name: string; sku: string | null };
+type Product = { id: string; name: string; sku: string | null; variants?: VariantLite[] };
 type Channel = { id: string; name: string; active: boolean };
 
 const FIELD_DEFS = [
@@ -12,6 +13,8 @@ const FIELD_DEFS = [
   { key: "order_date", label: "Data do pedido", required: false },
   { key: "status", label: "Status do pedido", required: true },
   { key: "sku", label: "SKU", required: false },
+  { key: "variation_sku", label: "SKU da variação (opcional)", required: false },
+  { key: "variation_name", label: "Nome da variação (opcional)", required: false },
   { key: "product_name", label: "Nome do produto", required: true },
   { key: "quantity", label: "Quantidade", required: true },
   { key: "item_total", label: "Valor da linha (Subtotal do produto)", required: true },
@@ -38,13 +41,24 @@ const GUESSES: Record<FieldKey, string[]> = {
     "nº de referência do sku principal",
     "no de referência do sku principal",
     "sku principal",
-    "sku de referência",
-    "sku de referencia",
     "sku pai",
-    "número de referência sku",
-    "numero de referencia sku",
     "sku do produto",
     "sku",
+  ],
+  variation_sku: [
+    "número de referência sku",
+    "numero de referencia sku",
+    "sku de referência",
+    "sku de referencia",
+    "sku da variação",
+    "sku da variacao",
+  ],
+  variation_name: [
+    "nome da variação",
+    "nome da variacao",
+    "variação",
+    "variacao",
+    "variation name",
   ],
   product_name: ["nome do produto", "product name", "produto"],
   quantity: ["quantidade", "qtd", "quantity"],
@@ -156,6 +170,8 @@ type MatchedRow = {
   shipping: number;
   real_fee: number;
   product_id: string | null;
+  variant_id: string | null;
+  variation_name: string;
 };
 
 export function SalesImport({ products, channels }: { products: Product[]; channels: Channel[] }) {
@@ -169,6 +185,8 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
     order_date: "",
     status: "",
     sku: "",
+    variation_sku: "",
+    variation_name: "",
     product_name: "",
     quantity: "",
     item_total: "",
@@ -183,6 +201,7 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
     errors: { external_order_id: string | null; reason: string }[];
   } | null>(null);
   const [manualPick, setManualPick] = useState<Record<number, string>>({});
+  const [manualVariant, setManualVariant] = useState<Record<number, string>>({});
 
   // A importação é só para Shopee por enquanto — o canal é achado sozinho pelo
   // nome cadastrado em Configurações, sem o usuário escolher nada aqui. A
@@ -227,14 +246,45 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
       const orderDateRaw = mapping.order_date ? String(row[mapping.order_date] ?? "").trim() : "";
       const statusRaw = String(row[mapping.status] ?? "").trim();
       const { status, known } = mapStatus(statusRaw);
+      const variationSku = mapping.variation_sku
+        ? String(row[mapping.variation_sku] ?? "").trim()
+        : "";
+      const variationName = mapping.variation_name
+        ? String(row[mapping.variation_name] ?? "").trim()
+        : "";
       let productId: string | null = manualPick[idx] || null;
+      let variantId: string | null = null;
+      // 1) SKU principal do produto, 2) SKU da variação (identifica produto + variação),
+      // 3) nome do produto.
       if (!productId && sku) {
         const bySku = products.find((p) => p.sku && normalize(p.sku) === normalize(sku));
         if (bySku) productId = bySku.id;
       }
+      if (!productId && variationSku) {
+        const owner = products.find((p) =>
+          (p.variants ?? []).some((v) => v.sku && normalize(v.sku) === normalize(variationSku))
+        );
+        if (owner) productId = owner.id;
+      }
       if (!productId && productName) {
         const byName = products.find((p) => normalize(p.name) === normalize(productName));
         if (byName) productId = byName.id;
+      }
+      const prod = products.find((p) => p.id === productId);
+      const pvs = prod?.variants ?? [];
+      if (pvs.length) {
+        const nv = normalize(variationName);
+        const found =
+          (manualVariant[idx] && pvs.find((v) => v.id === manualVariant[idx])) ||
+          (variationSku &&
+            pvs.find((v) => v.sku && normalize(v.sku) === normalize(variationSku))) ||
+          (nv && pvs.find((v) => normalize(v.name) === nv)) ||
+          (nv &&
+            pvs.find(
+              (v) => normalize(v.name).startsWith(nv) || nv.startsWith(normalize(v.name))
+            )) ||
+          (nv && pvs.find((v) => normalize(v.name).includes(nv) || nv.includes(normalize(v.name))));
+        if (found) variantId = found.id;
       }
       return {
         order_number: orderNumber,
@@ -248,11 +298,19 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
         shipping,
         real_fee: realFee,
         product_id: productId,
+        variant_id: variantId,
+        variation_name: variationName,
       };
     });
-  }, [rawRows, mapping, feeColumns, products, manualPick, step]);
+  }, [rawRows, mapping, feeColumns, products, manualPick, manualVariant, step]);
 
   const unmatchedCount = matched.filter((m) => !m.product_id).length;
+  const missingVariantCount = matched.filter(
+    (m) =>
+      m.product_id &&
+      !m.variant_id &&
+      (products.find((p) => p.id === m.product_id)?.variants?.length ?? 0) > 0
+  ).length;
   const unknownStatusCount = matched.filter((m) => !m.statusKnown).length;
   const missingRequired = FIELD_DEFS.filter((f) => f.required && !mapping[f.key]);
 
@@ -283,7 +341,12 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
           status: string;
           shipping_cost: number;
           real_fee: number;
-          items: { product_id: string; quantity: number; unit_price: number }[];
+          items: {
+            product_id: string;
+            variant_id: string | null;
+            quantity: number;
+            unit_price: number;
+          }[];
         }
       >();
       matched.forEach((m) => {
@@ -304,7 +367,12 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
         const g = groups.get(key)!;
         g.shipping_cost += m.shipping;
         g.real_fee += m.real_fee;
-        g.items.push({ product_id: m.product_id, quantity: m.quantity, unit_price: unitPrice });
+        g.items.push({
+          product_id: m.product_id,
+          variant_id: m.variant_id,
+          quantity: m.quantity,
+          unit_price: unitPrice,
+        });
       });
       const res = await fetch("/api/orders/import", {
         method: "POST",
@@ -332,6 +400,7 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
     setHeaders([]);
     setRawRows([]);
     setManualPick({});
+    setManualVariant({});
     setResult(null);
     setError("");
     if (ref.current) ref.current.value = "";
@@ -436,10 +505,18 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
                 ignoradas)
               </span>
             )}
+            {missingVariantCount > 0 && (
+              <span style={{ color: "#f87171" }}>
+                {" "}
+                — {missingVariantCount} linha(s) de produto com variações sem variação identificada
+                (escolha na coluna Variação; sem escolha, entram sem variação)
+              </span>
+            )}
             {unknownStatusCount > 0 && (
               <span style={{ color: "#f87171" }}>
                 {" "}
-                — {unknownStatusCount} com status não reconhecido (tratadas como &quot;A enviar&quot;)
+                — {unknownStatusCount} com status não reconhecido (tratadas como &quot;A
+                enviar&quot;)
               </span>
             )}
             .
@@ -452,6 +529,7 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
                   <th>Status</th>
                   <th>Produto na planilha</th>
                   <th>Produto no sistema</th>
+                  <th>Variação</th>
                   <th>Qtd</th>
                   <th>Valor</th>
                   <th>Taxa real</th>
@@ -490,6 +568,33 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
                           ))}
                         </select>
                       )}
+                    </td>
+                    <td>
+                      {(() => {
+                        const pvs = products.find((p) => p.id === m.product_id)?.variants ?? [];
+                        if (!m.product_id || !pvs.length)
+                          return <span className="muted">{m.variation_name || "—"}</span>;
+                        return (
+                          <select
+                            className="select"
+                            value={m.variant_id || ""}
+                            onChange={(e) =>
+                              setManualVariant((mv) => ({ ...mv, [idx]: e.target.value }))
+                            }
+                          >
+                            <option value="">
+                              {m.variation_name
+                                ? `${m.variation_name} — escolher...`
+                                : "Escolher..."}
+                            </option>
+                            {pvs.map((v) => (
+                              <option key={v.id} value={v.id}>
+                                {v.name}
+                              </option>
+                            ))}
+                          </select>
+                        );
+                      })()}
                     </td>
                     <td>{m.quantity}</td>
                     <td>

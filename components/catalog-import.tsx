@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { parseSpreadsheet, normalizeText, type SheetRow } from "@/lib/parse-spreadsheet";
 import { errorMessage } from "@/lib/errors";
+import { parseVariantRows, type VariantRow } from "@/lib/parse-variant-rows";
 
 function guessHeader(headers: string[], candidates: string[]): string {
   const norm = headers.map(normalizeText);
@@ -452,8 +453,147 @@ function PriceImport() {
   );
 }
 
+function VariantsImport() {
+  const r = useRouter();
+  const ref = useRef<HTMLInputElement>(null);
+  const [rows, setRows] = useState<VariantRow[]>([]);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{
+    created: number;
+    skipped: number;
+    notFound: string[];
+    errors: string[];
+  } | null>(null);
+
+  async function handleFile(f: File) {
+    setError("");
+    setResult(null);
+    try {
+      const { rows: parsed } = await parseVariantRows(f);
+      setRows(parsed);
+    } catch (e) {
+      setRows([]);
+      setError(errorMessage(e, "Não consegui ler esse arquivo."));
+    }
+  }
+
+  async function submit() {
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch("/api/products/import-variants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Erro ao importar.");
+      setResult(j);
+      r.refresh();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const productCount = new Set(rows.map((x) => x.shopee_id || x.product_name)).size;
+
+  return (
+    <div>
+      <p className="muted">
+        Suba o modelo <strong>&quot;Vendas&quot;</strong> exportado em Editar em Massa → Baixar, na
+        Shopee (arquivo <code>mass_update_sales_info...</code>). Cada linha vira uma variação do
+        produto (nome, SKU e preço). Variações que já existem são mantidas como estão.
+      </p>
+      {error && <div className="error">{error}</div>}
+      <div className="field">
+        <input
+          ref={ref}
+          className="input"
+          type="file"
+          accept=".csv,.xlsx,.xls"
+          onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+        />
+      </div>
+      {rows.length > 0 && !result && (
+        <>
+          <p className="muted">
+            {rows.length} variações em {productCount} produto{productCount === 1 ? "" : "s"}.
+          </p>
+          <div style={{ maxHeight: 320, overflow: "auto" }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Produto</th>
+                  <th>Variação</th>
+                  <th>SKU</th>
+                  <th>Preço</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.slice(0, 200).map((x, i) => (
+                  <tr key={i}>
+                    <td>{x.product_name}</td>
+                    <td>{x.variation_name}</td>
+                    <td>{x.variation_sku || "—"}</td>
+                    <td>
+                      {x.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button
+            className="btn btn-primary"
+            onClick={submit}
+            disabled={busy}
+            style={{ marginTop: 12 }}
+          >
+            {busy ? "Importando..." : `Importar ${rows.length} variações`}
+          </button>
+        </>
+      )}
+      {result && (
+        <div>
+          <p>
+            ✅ <strong>{result.created}</strong> variação(ões) criada(s)
+            {result.skipped > 0 && <>, {result.skipped} já existiam</>}.
+          </p>
+          {result.errors.length > 0 && (
+            <ul>
+              {result.errors.map((e, i) => (
+                <li key={i} className="muted">
+                  {e}
+                </li>
+              ))}
+            </ul>
+          )}
+          {result.notFound.length > 0 && (
+            <>
+              <p className="muted">
+                {result.notFound.length} produto(s) da planilha não foram encontrados no sistema
+                (importe-os primeiro):
+              </p>
+              <ul>
+                {result.notFound.map((n, i) => (
+                  <li key={i} className="muted">
+                    {n}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CatalogImport() {
-  const [tab, setTab] = useState<"sku" | "media" | "price">("sku");
+  const [tab, setTab] = useState<"sku" | "media" | "price" | "variants">("sku");
   return (
     <div className="card">
       <div className="section-title">
@@ -481,9 +621,24 @@ export function CatalogImport() {
         >
           Preço
         </button>
+        <button
+          type="button"
+          className={`page-tab ${tab === "variants" ? "page-tab-active" : ""}`}
+          onClick={() => setTab("variants")}
+        >
+          Variações
+        </button>
       </div>
       <div className="page-tab-panel">
-        {tab === "sku" ? <SkuImport /> : tab === "media" ? <MediaImport /> : <PriceImport />}
+        {tab === "sku" ? (
+          <SkuImport />
+        ) : tab === "media" ? (
+          <MediaImport />
+        ) : tab === "variants" ? (
+          <VariantsImport />
+        ) : (
+          <PriceImport />
+        )}
       </div>
     </div>
   );

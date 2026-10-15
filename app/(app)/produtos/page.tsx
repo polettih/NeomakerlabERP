@@ -12,6 +12,7 @@ type ProductRow = {
   active: boolean;
   category: string | null;
   created_at: string;
+  product_variants: { id: string; name: string; sale_price: number; active: boolean }[] | null;
   product_images:
     { id: string; public_url: string; storage_path: string; sort_order: number }[] | null;
 };
@@ -23,7 +24,7 @@ export default async function ProdutosPage() {
       supabase
         .from("products")
         .select(
-          "id,name,sku,sale_price,estimated_cost,active,category,created_at,product_images(id,public_url,storage_path,sort_order)"
+          "id,name,sku,sale_price,estimated_cost,active,category,created_at,product_images(id,public_url,storage_path,sort_order),product_variants(id,name,sale_price,active)"
         )
         .order("created_at", { ascending: false }),
       supabase

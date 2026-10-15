@@ -6,7 +6,7 @@ export default async function ImportarPedidosPage() {
   const [{ data: products }, { data: channels }] = await Promise.all([
     supabase
       .from("products")
-      .select("id,name,sku")
+      .select("id,name,sku,product_variants(id,name,sku)")
       .eq("organization_id", organizationId)
       .eq("active", true)
       .order("name"),
@@ -27,7 +27,13 @@ export default async function ImportarPedidosPage() {
           </p>
         </div>
       </div>
-      <SalesImport products={products ?? []} channels={channels ?? []} />
+      <SalesImport
+        products={(products ?? []).map(({ product_variants, ...p }) => ({
+          ...p,
+          variants: product_variants ?? [],
+        }))}
+        channels={channels ?? []}
+      />
     </div>
   );
 }
