@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { errorMessage } from "@/lib/errors";
+import { assertMaterialsOwned } from "@/lib/ownership";
 export async function POST(req: Request) {
   try {
     const b = await req.json();
@@ -12,7 +13,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "A quantidade deve ser maior que zero." }, { status: 400 });
     if (!Number.isFinite(total) || total < 0)
       return NextResponse.json({ error: "Informe um valor de compra válido." }, { status: 400 });
-    const { supabase } = await requireUser();
+    const { supabase, organizationId } = await requireUser();
+    await assertMaterialsOwned(supabase, organizationId, [b.material_id]);
     const { error } = await supabase.rpc("register_material_purchase", {
       p_material: b.material_id,
       p_quantity: quantity,
@@ -23,6 +25,9 @@ export async function POST(req: Request) {
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ error: errorMessage(e, "Erro ao registrar compra.") }, { status: 500 });
+    return NextResponse.json(
+      { error: errorMessage(e, "Erro ao registrar compra.") },
+      { status: 500 }
+    );
   }
 }

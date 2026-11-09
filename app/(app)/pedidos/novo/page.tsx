@@ -23,7 +23,7 @@ export default async function NovoPedidoPage() {
       // um produto novo.
       supabase
         .from("materials")
-        .select("id,name,material_type,color_name,average_cost,unit")
+        .select("id,name,material_type,color_name,average_cost,unit,quantity_on_hand")
         .eq("active", true)
         .eq("organization_id", organizationId)
         .order("material_type")

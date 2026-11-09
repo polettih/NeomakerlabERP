@@ -173,3 +173,16 @@ Inclui clientes editáveis com comportamento e observações, além da calculado
 
 ## V8
 A V8 separa a precificação da tela de produto e adiciona gestão de materiais/estoque. Execute `007_inventory_materials_pricing.sql` no Supabase. Depois use as telas `Precificação` e `Estoque`.
+
+
+## Migrations recentes
+
+Rode no SQL Editor do Supabase, nesta ordem (veja `supabase/migrations/README.md`):
+
+- `020_product_variants.sql` — variações de produto (nome, SKU, preço e custo por variação).
+- `021_machine_delete_expense.sql` — excluir uma máquina cancela a despesa de compra dela no Financeiro.
+
+## Verificações automáticas
+
+`npm run typecheck` e `npm run lint` rodam a cada push (GitHub Actions, `.github/workflows/ci.yml`).
+Variáveis de ambiente: veja `.env.example`.

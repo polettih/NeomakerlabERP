@@ -13,8 +13,8 @@ export default async function ImportarProdutosPage() {
         <div>
           <h1>Importar produtos</h1>
           <p className="muted">
-            Traga o catálogo exportado da Shopee (dados básicos + mídia) e cadastre tudo de uma
-            vez, com fotos.
+            Traga o catálogo exportado da Shopee (dados básicos + mídia) e cadastre tudo de uma vez,
+            com fotos.
           </p>
         </div>
       </div>

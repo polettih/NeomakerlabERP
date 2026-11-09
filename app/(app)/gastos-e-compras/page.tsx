@@ -4,6 +4,8 @@ import { CreateExpenseForm } from "@/components/create-expense-form";
 import { InventoryManager } from "@/components/inventory-manager";
 import { ExpenseList } from "@/components/expense-list";
 import { PageTabs } from "@/components/page-tabs";
+import { ShoppingList } from "@/components/shopping-list";
+import { buildShoppingList } from "@/lib/shopping-list";
 import { money, n } from "@/lib/format";
 import { getFinanceSummary } from "@/lib/services/finance-summary";
 import type { Expense } from "@/lib/types";
@@ -35,6 +37,7 @@ export default async function GastosPage() {
       // mesmos números de "saídas" e "despesas em aberto" que aparecem lá.
       getFinanceSummary(supabase, organizationId),
     ]);
+  const shopping = await buildShoppingList(supabase, organizationId, materials ?? []);
   const stockValue = (materials ?? []).reduce(
     (
       sum: number,
@@ -81,6 +84,11 @@ export default async function GastosPage() {
             id: "estoque",
             label: "📦 Estoque de materiais",
             content: <InventoryManager materials={materials ?? []} purchases={purchases ?? []} />,
+          },
+          {
+            id: "compras",
+            label: `🛍️ Lista de compras${shopping.length ? ` (${shopping.length})` : ""}`,
+            content: <ShoppingList rows={shopping} />,
           },
           {
             id: "despesas",

@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { errorMessage } from "@/lib/errors";
+import { assertProductOwned } from "@/lib/ownership";
 export async function DELETE(req: Request) {
   try {
-    const { supabase } = await requireUser();
+    const { supabase, organizationId } = await requireUser();
     const b = await req.json();
     if (!b.product_id)
       return NextResponse.json({ error: "product_id obrigatório." }, { status: 400 });
+    await assertProductOwned(supabase, organizationId, b.product_id);
     const { error } = await supabase
       .from("product_materials")
       .delete()

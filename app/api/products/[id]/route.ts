@@ -23,7 +23,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (error) throw error;
     return NextResponse.json(data);
   } catch (e) {
-    return NextResponse.json({ error: errorMessage(e, "Erro ao atualizar produto.") }, { status: 500 });
+    return NextResponse.json(
+      { error: errorMessage(e, "Erro ao atualizar produto.") },
+      { status: 500 }
+    );
   }
 }
 
@@ -39,6 +42,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ error: errorMessage(e, "Erro ao excluir produto.") }, { status: 500 });
+    return NextResponse.json(
+      { error: errorMessage(e, "Erro ao excluir produto.") },
+      { status: 500 }
+    );
   }
 }

@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { errorMessage } from "@/lib/errors";
+import { assertProductOwned } from "@/lib/ownership";
+import { savePricing } from "@/lib/product-pricing";
 export async function GET(req: Request) {
   try {
-    const { supabase } = await requireUser();
+    const { supabase, organizationId } = await requireUser();
     const productId = new URL(req.url).searchParams.get("product_id");
     if (!productId) return NextResponse.json({ error: "product_id obrigatório." }, { status: 400 });
+    await assertProductOwned(supabase, organizationId, productId);
     const { data, error } = await supabase
       .from("product_pricing")
       .select("*")
@@ -25,24 +28,8 @@ export async function POST(req: Request) {
     const b = await req.json();
     const { supabase, organizationId } = await requireUser();
     const { product_id, ...values } = b;
-    const { data: settings } = await supabase
-      .from("organization_settings")
-      .select("labor_hour_rate")
-      .eq("organization_id", organizationId)
-      .maybeSingle();
-    values.labor_hour = Number(settings?.labor_hour_rate ?? 30);
-    values.marketplace_commission = 0;
-    const { error } = await supabase
-      .from("product_pricing")
-      .upsert({ product_id, ...values }, { onConflict: "product_id" });
-    if (error) throw error;
-    const { error: pe } = await supabase
-      .from("products")
-      .update({
-        estimated_cost: Number(b.total_cost || 0),
-      })
-      .eq("id", product_id);
-    if (pe) throw pe;
+    await assertProductOwned(supabase, organizationId, product_id);
+    await savePricing(supabase, organizationId, product_id, values);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json(

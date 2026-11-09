@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { errorMessage } from "@/lib/errors";
+import { assertMaterialsOwned, assertProductOwned } from "@/lib/ownership";
+
 export async function GET(req: Request) {
   try {
-    const { supabase } = await requireUser();
+    const { supabase, organizationId } = await requireUser();
     const productId = new URL(req.url).searchParams.get("product_id");
     if (!productId) return NextResponse.json({ error: "product_id obrigatório." }, { status: 400 });
+    await assertProductOwned(supabase, organizationId, productId);
     const { data, error } = await supabase
       .from("product_materials")
       .select("id,product_id,material_id,quantity,usage_type,notes")
@@ -16,10 +19,13 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: errorMessage(e, "Erro.") }, { status: 500 });
   }
 }
+
 export async function POST(req: Request) {
   try {
     const b = await req.json();
-    const { supabase } = await requireUser();
+    const { supabase, organizationId } = await requireUser();
+    await assertProductOwned(supabase, organizationId, b.product_id);
+    await assertMaterialsOwned(supabase, organizationId, [b.material_id]);
     const { data, error } = await supabase
       .from("product_materials")
       .upsert(
@@ -40,11 +46,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: errorMessage(e, "Erro.") }, { status: 500 });
   }
 }
+
 export async function DELETE(req: Request) {
   try {
     const b = await req.json();
-    const { supabase } = await requireUser();
-    const { error } = await supabase.from("product_materials").delete().eq("id", b.id);
+    const { supabase, organizationId } = await requireUser();
+    const { data: row, error: re } = await supabase
+      .from("product_materials")
+      .select("id,product_id")
+      .eq("id", b.id)
+      .maybeSingle();
+    if (re) throw re;
+    if (!row) return NextResponse.json({ ok: true });
+    await assertProductOwned(supabase, organizationId, row.product_id);
+    const { error } = await supabase.from("product_materials").delete().eq("id", row.id);
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (e) {

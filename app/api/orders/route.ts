@@ -15,6 +15,7 @@ type OrderItemInput = {
 
 export async function POST(request: Request) {
   const { supabase, organizationId } = await requireUser();
+  let createdOrderId: string | null = null;
   try {
     const body = await request.json();
     if (!body.items?.length)
@@ -139,6 +140,7 @@ export async function POST(request: Request) {
       .select()
       .single();
     if (oe) throw oe;
+    createdOrderId = order.id;
     // Insere item a item (não em lote) para garantir que cada order_item_materials
     // seja associado ao id certo — uma inserção em lote não garante a ordem de volta
     // das linhas, e aqui isso decidiria qual variação de material vai para qual item.
@@ -218,6 +220,14 @@ export async function POST(request: Request) {
     }
     return NextResponse.json(order);
   } catch (e) {
+    // Não deixa pedido pela metade (sem itens, sem produção etc.): apaga o que foi criado.
+    if (createdOrderId) {
+      await supabase
+        .from("orders")
+        .delete()
+        .eq("id", createdOrderId)
+        .eq("organization_id", organizationId);
+    }
     return NextResponse.json({ error: errorMessage(e, "Erro interno") }, { status: 500 });
   }
 }

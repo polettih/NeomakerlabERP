@@ -40,10 +40,7 @@ export async function POST(req: Request) {
     if (body.energy_cost_kwh !== undefined) {
       const kwh = Number(body.energy_cost_kwh);
       if (!Number.isFinite(kwh) || kwh < 0)
-        return NextResponse.json(
-          { error: "Informe um custo de energia válido." },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "Informe um custo de energia válido." }, { status: 400 });
       update.energy_cost_kwh = kwh;
     }
     const { error } = await supabase

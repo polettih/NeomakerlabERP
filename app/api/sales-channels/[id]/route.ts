@@ -30,7 +30,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     return NextResponse.json(data);
   } catch (e: unknown) {
-    return NextResponse.json({ error: errorMessage(e, "Erro ao atualizar canal.") }, { status: 500 });
+    return NextResponse.json(
+      { error: errorMessage(e, "Erro ao atualizar canal.") },
+      { status: 500 }
+    );
   }
 }
 export async function DELETE(_r: Request, { params }: { params: Promise<{ id: string }> }) {

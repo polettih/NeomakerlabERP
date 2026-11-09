@@ -70,8 +70,7 @@ export default async function ReceitaPinturaPage() {
         <div className="card">
           <h2>Receitas iniciais</h2>
           <p className="muted">
-            São pontos de partida. Ajuste conforme a marca da tinta, aerógrafo/pincel e
-            referência.
+            São pontos de partida. Ajuste conforme a marca da tinta, aerógrafo/pincel e referência.
           </p>
           <div className="grid">
             {(templates ?? []).map((t) => (

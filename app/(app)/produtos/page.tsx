@@ -12,7 +12,17 @@ type ProductRow = {
   active: boolean;
   category: string | null;
   created_at: string;
-  product_variants: { id: string; name: string; sale_price: number; active: boolean }[] | null;
+  product_variants:
+    | {
+        id: string;
+        name: string;
+        sale_price: number;
+        units: number;
+        cost_override: number | null;
+        active: boolean;
+        sort_order: number;
+      }[]
+    | null;
   product_images:
     { id: string; public_url: string; storage_path: string; sort_order: number }[] | null;
 };
@@ -24,7 +34,7 @@ export default async function ProdutosPage() {
       supabase
         .from("products")
         .select(
-          "id,name,sku,sale_price,estimated_cost,active,category,created_at,product_images(id,public_url,storage_path,sort_order),product_variants(id,name,sale_price,active)"
+          "id,name,sku,sale_price,estimated_cost,active,category,created_at,product_images(id,public_url,storage_path,sort_order),product_variants(id,name,sale_price,units,cost_override,active,sort_order)"
         )
         .order("created_at", { ascending: false }),
       supabase
@@ -55,9 +65,14 @@ export default async function ProdutosPage() {
           <h1>Produtos</h1>
           <p className="muted">Catálogo, disponibilidade, categorias e fotos</p>
         </div>
-        <Link className="btn btn-secondary" href="/produtos/importar-catalogo">
-          Importar da Shopee
-        </Link>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Link className="btn btn-secondary" href="/produtos/importar">
+            Importar produtos da Shopee
+          </Link>
+          <Link className="btn btn-secondary" href="/produtos/importar-catalogo">
+            Atualizar SKU, fotos, preços e variações
+          </Link>
+        </div>
       </div>
       <CreateProductForm
         materials={materials ?? []}

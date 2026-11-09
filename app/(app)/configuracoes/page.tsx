@@ -4,7 +4,10 @@ import { OperationSettingsForm } from "@/components/operation-settings-form";
 export default async function ConfiguracoesPage() {
   const { supabase, organizationId } = await requireUser();
   const [{ data }, { data: settings }] = await Promise.all([
-    supabase.from("sales_channels").select("id,name,active,fee_percent,fixed_fee,fee_bands").order("name"),
+    supabase
+      .from("sales_channels")
+      .select("id,name,active,fee_percent,fixed_fee,fee_bands")
+      .order("name"),
     supabase
       .from("organization_settings")
       .select("labor_hour_rate,energy_cost_kwh")

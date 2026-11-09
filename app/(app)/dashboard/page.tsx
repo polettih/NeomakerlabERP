@@ -1,9 +1,62 @@
 import Link from "next/link";
 import { getDashboard } from "@/lib/services/dashboard";
+import { getProfitability, type ProfitRow } from "@/lib/services/profitability";
+import { requireUser } from "@/lib/auth";
 import { signedMoney } from "@/lib/format";
+function ProfitTable({ title, hint, rows }: { title: string; hint: string; rows: ProfitRow[] }) {
+  return (
+    <div className="card">
+      <div className="section-title">
+        <div>
+          <h2>{title}</h2>
+          <p className="muted">{hint}</p>
+        </div>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>{title.includes("canal") ? "Canal" : "Produto / variação"}</th>
+              <th>Qtd</th>
+              <th>Receita</th>
+              <th>Custo</th>
+              <th>Taxas + frete</th>
+              <th>Lucro</th>
+              <th>Margem</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, 10).map((r) => (
+              <tr key={r.label}>
+                <td>
+                  <strong>{r.label}</strong>
+                </td>
+                <td>{r.qty}</td>
+                <td>{money(r.revenue)}</td>
+                <td>{money(r.cost)}</td>
+                <td>{money(r.fees + r.shipping)}</td>
+                <td style={{ color: r.profit < 0 ? "#ef4444" : undefined }}>{money(r.profit)}</td>
+                <td>{r.margin.toFixed(0)}%</td>
+              </tr>
+            ))}
+            {!rows.length && (
+              <tr>
+                <td colSpan={7} className="muted">
+                  Nenhuma venda ainda.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 export default async function DashboardPage() {
   const d = await getDashboard();
+  const { supabase, organizationId } = await requireUser();
+  const profitability = await getProfitability(supabase, organizationId);
   const pending = d.orders.filter((o) => !["delivered", "cancelled"].includes(o.status)).length;
   return (
     <div className="content">
@@ -126,6 +179,19 @@ export default async function DashboardPage() {
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="grid" style={{ marginTop: 18, gap: 18 }}>
+        <ProfitTable
+          title="Lucro por canal de venda"
+          hint="Receita − custo dos produtos − taxas do marketplace − frete."
+          rows={profitability.channels}
+        />
+        <ProfitTable
+          title="Lucro por produto e variação"
+          hint="Top 10 por lucro. Taxas e frete são rateados entre os itens do pedido."
+          rows={profitability.products}
+        />
       </div>
     </div>
   );

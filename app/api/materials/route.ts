@@ -106,6 +106,9 @@ export async function DELETE(req: Request) {
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ error: errorMessage(e, "Erro ao excluir material.") }, { status: 500 });
+    return NextResponse.json(
+      { error: errorMessage(e, "Erro ao excluir material.") },
+      { status: 500 }
+    );
   }
 }

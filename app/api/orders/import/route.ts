@@ -151,6 +151,7 @@ export async function POST(request: Request) {
         const status = VALID_STATUSES.includes(group.status || "") ? group.status! : "new";
         const isCancelled = status === "cancelled";
         const isDelivered = status === "delivered";
+        let createdOrderId: string | null = null;
         const { data: order, error: oe } = await supabase
           .from("orders")
           .insert({
@@ -174,20 +175,33 @@ export async function POST(request: Request) {
           .select("id")
           .single();
         if (oe) throw oe;
-        const { error: ie } = await supabase
-          .from("order_items")
-          .insert(items.map((i) => ({ ...i, order_id: order.id })));
-        if (ie) throw ie;
-        await supabase.from("order_status_history").insert({
-          order_id: order.id,
-          new_status: status,
-        });
-        await supabase.from("production_orders").insert({
-          organization_id: organizationId,
-          order_id: order.id,
-          status: productionStatusFor(status),
-          completed_at: isDelivered ? orderDate : null,
-        });
+        createdOrderId = order.id;
+        try {
+          const { error: ie } = await supabase
+            .from("order_items")
+            .insert(items.map((i) => ({ ...i, order_id: order.id })));
+          if (ie) throw ie;
+          const { error: he } = await supabase.from("order_status_history").insert({
+            order_id: order.id,
+            new_status: status,
+          });
+          if (he) throw he;
+          const { error: pe2 } = await supabase.from("production_orders").insert({
+            organization_id: organizationId,
+            order_id: order.id,
+            status: productionStatusFor(status),
+            completed_at: isDelivered ? orderDate : null,
+          });
+          if (pe2) throw pe2;
+        } catch (inner) {
+          // Não deixa pedido pela metade: apaga o pedido (itens e histórico saem junto).
+          await supabase
+            .from("orders")
+            .delete()
+            .eq("id", createdOrderId)
+            .eq("organization_id", organizationId);
+          throw inner;
+        }
         created++;
       } catch (err) {
         errors.push({
