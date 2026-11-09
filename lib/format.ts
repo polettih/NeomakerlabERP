@@ -49,5 +49,7 @@ export const formatDate = (v: string | null | undefined) =>
 const PAID_STATUSES = new Set(["paid", "pago", "paid_out"]);
 const CANCELLED_STATUSES = new Set(["cancelled", "canceled", "cancelado"]);
 
-export const isPaidStatus = (status: unknown) => PAID_STATUSES.has(String(status ?? "").toLowerCase());
-export const isCancelledStatus = (status: unknown) => CANCELLED_STATUSES.has(String(status ?? "").toLowerCase());
+export const isPaidStatus = (status: unknown) =>
+  PAID_STATUSES.has(String(status ?? "").toLowerCase());
+export const isCancelledStatus = (status: unknown) =>
+  CANCELLED_STATUSES.has(String(status ?? "").toLowerCase());

@@ -12,6 +12,7 @@ export function VariantsEditor({
   onChange,
   productCost,
   basePrice,
+  suggestedPrice = 0,
 }: {
   variants: VariantDraft[];
   onChange: (v: VariantDraft[]) => void;
@@ -19,6 +20,8 @@ export function VariantsEditor({
   productCost: number;
   /** Preço de venda do produto, sugerido ao adicionar uma variação. */
   basePrice: number;
+  /** Preço sugerido pela precificação (1 unidade); usado no botão "Aplicar preço sugerido". */
+  suggestedPrice?: number;
 }) {
   const update = (key: string, patch: Partial<VariantDraft>) =>
     onChange(variants.map((v) => (v.key === key ? { ...v, ...patch } : v)));
@@ -134,10 +137,27 @@ export function VariantsEditor({
           </div>
         );
       })}
-      <div>
+      <div className="actions">
         <button type="button" className="btn btn-secondary btn-sm" onClick={add}>
           + Adicionar variação
         </button>
+        {variants.length > 0 && suggestedPrice > 0 && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            title="Preço de cada variação = preço sugerido × unidades"
+            onClick={() =>
+              onChange(
+                variants.map((v) => ({
+                  ...v,
+                  sale_price: (suggestedPrice * (Number(v.units) || 1)).toFixed(2),
+                }))
+              )
+            }
+          >
+            Aplicar preço sugerido ({money(suggestedPrice)} × unidades)
+          </button>
+        )}
       </div>
     </div>
   );

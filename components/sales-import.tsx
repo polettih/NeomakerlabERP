@@ -98,6 +98,14 @@ const STATUS_MAP: Record<string, string> = {
 function mapStatus(raw: string): { status: string; known: boolean } {
   const n = normalize(raw);
   if (STATUS_MAP[n]) return { status: STATUS_MAP[n], known: true };
+  // Textos de outras plataformas (Mercado Livre: "Pacote cancelado", "Entregue"...; TikTok
+  // Shop: "Awaiting shipment", "In transit", "Completed"...).
+  if (/cancel/.test(n)) return { status: "cancelled", known: true };
+  if (/entreg|deliver|conclu|complet/.test(n)) return { status: "delivered", known: true };
+  if (/a caminho|enviado|shipped|in transit|transito|retirada/.test(n))
+    return { status: "shipped", known: true };
+  if (/prepar|pronto|awaiting|processando|pago|paid|pendente|a enviar|para enviar|on hold/.test(n))
+    return { status: "new", known: true };
   return { status: "new", known: false };
 }
 const STATUS_LABEL: Record<string, string> = {
@@ -106,6 +114,89 @@ const STATUS_LABEL: Record<string, string> = {
   shipped: "Enviado",
   delivered: "Entregue",
 };
+
+// ---- Plataformas ---------------------------------------------------------------------------
+// A plataforma é detectada sozinha pelas colunas do arquivo (o usuário não escolhe). Cada uma
+// define: como achar o canal cadastrado, colunas próprias, colunas de taxa real (quando a
+// planilha traz) e o sinal da taxa. Sem colunas de taxa (TikTok Shop), o sistema usa a taxa
+// e as faixas cadastradas no canal em Configurações.
+type PlatformKey = "shopee" | "mercadolivre" | "tiktok";
+type Platform = {
+  key: PlatformKey;
+  label: string;
+  channelMatch: string;
+  detect: (norm: string[]) => boolean;
+  guesses: Partial<Record<FieldKey, string[]>>;
+  feeColumns: string[];
+};
+const PLATFORMS: Platform[] = [
+  {
+    key: "shopee",
+    label: "Shopee",
+    channelMatch: "shopee",
+    detect: (h) =>
+      h.includes("id do pedido") || h.some((x) => x.includes("taxa de comissao liquida")),
+    guesses: {},
+    feeColumns: FEE_COLUMN_GUESSES,
+  },
+  {
+    key: "mercadolivre",
+    label: "Mercado Livre",
+    channelMatch: "mercado",
+    detect: (h) =>
+      h.some((x) =>
+        ["n.o de venda", "n.º de venda", "nº de venda", "n° de venda", "# de anuncio"].some((k) =>
+          x.startsWith(k)
+        )
+      ) || h.some((x) => x.startsWith("tarifa de venda")),
+    guesses: {
+      order_number: ["n.º de venda", "nº de venda", "n° de venda", "numero de venda"],
+      order_date: ["data da venda"],
+      status: ["descrição do status", "descricao do status", "estado"],
+      sku: ["sku"],
+      variation_name: ["variação", "variacao"],
+      product_name: ["título do anúncio", "titulo do anuncio"],
+      quantity: ["unidades"],
+      item_total: ["receita por produtos (brl)", "receita por produtos"],
+      shipping: ["tarifas de envio (brl)", "tarifas de envio", "custo de envio"],
+    },
+    feeColumns: ["tarifa de venda e impostos (brl)", "tarifa de venda e impostos"],
+  },
+  {
+    key: "tiktok",
+    label: "TikTok Shop",
+    channelMatch: "tiktok",
+    detect: (h) =>
+      h.includes("order id") &&
+      (h.includes("seller sku") || h.includes("sku id") || h.includes("variation")),
+    guesses: {
+      order_number: ["order id"],
+      order_date: ["created time", "paid time"],
+      status: ["order status"],
+      sku: ["seller sku"],
+      variation_name: ["variation"],
+      product_name: ["product name"],
+      quantity: ["quantity"],
+      item_total: ["sku subtotal after discount", "sku subtotal before discount"],
+      shipping: ["shipping fee after discount", "original shipping fee"],
+    },
+    feeColumns: [],
+  },
+];
+function detectPlatform(headers: string[]): Platform {
+  const norm = headers.map((h) =>
+    h
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+  );
+  // Ordem: Mercado Livre e TikTok têm colunas exclusivas; a Shopee é o padrão.
+  return (
+    PLATFORMS.find((p) => p.key !== "shopee" && p.detect(norm)) ??
+    PLATFORMS.find((p) => p.key === "shopee")!
+  );
+}
 
 // Relatórios brasileiros (Shopee, TikTok Shop) exportam datas como "DD/MM/AAAA HH:mm",
 // que o `new Date(...)` nativo do JS interpreta errado (ou quebra): ele lê como
@@ -193,6 +284,7 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
     shipping: "",
   });
   const [feeColumns, setFeeColumns] = useState<string[]>([]);
+  const [platform, setPlatform] = useState<Platform>(PLATFORMS[0]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{
@@ -203,10 +295,10 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
   const [manualPick, setManualPick] = useState<Record<number, string>>({});
   const [manualVariant, setManualVariant] = useState<Record<number, string>>({});
 
-  // A importação é só para Shopee por enquanto — o canal é achado sozinho pelo
-  // nome cadastrado em Configurações, sem o usuário escolher nada aqui. A
-  // escolha de plataforma continua manual apenas no lançamento de pedido avulso.
-  const shopeeChannel = channels.find((c) => normalize(c.name).includes("shopee"));
+  // A plataforma é detectada pelas colunas do arquivo e o canal é achado sozinho pelo nome
+  // cadastrado em Configurações — o usuário não escolhe nada aqui. A escolha manual de
+  // plataforma continua só no lançamento de pedido avulso.
+  const channel = channels.find((c) => normalize(c.name).includes(platform.channelMatch));
 
   async function handleFile(f: File) {
     setError("");
@@ -214,11 +306,14 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
       const { headers: hdrs, rows } = await parseSpreadsheet(f);
       setHeaders(hdrs);
       setRawRows(rows);
+      const plat = detectPlatform(hdrs);
+      setPlatform(plat);
       const guessed = {} as Record<FieldKey, string>;
-      for (const fd of FIELD_DEFS) guessed[fd.key] = guessColumn(hdrs, GUESSES[fd.key]);
+      for (const fd of FIELD_DEFS)
+        guessed[fd.key] = guessColumn(hdrs, [...(plat.guesses[fd.key] ?? []), ...GUESSES[fd.key]]);
       setMapping(guessed);
       const guessedFeeCols = hdrs.filter((h) =>
-        FEE_COLUMN_GUESSES.some((g) => normalize(h) === normalize(g))
+        plat.feeColumns.some((g) => normalize(h) === normalize(g))
       );
       setFeeColumns(guessedFeeCols);
       setStep("map");
@@ -238,8 +333,9 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
       const sku = mapping.sku ? String(row[mapping.sku] ?? "").trim() : "";
       const qty = Math.max(Number(row[mapping.quantity]) || 1, 1);
       const total = parseMoney(row[mapping.item_total]);
-      const shipping = mapping.shipping ? parseMoney(row[mapping.shipping]) : 0;
-      const realFee = feeColumns.reduce((s, c) => s + parseMoney(row[c]), 0);
+      const shipping = mapping.shipping ? Math.abs(parseMoney(row[mapping.shipping])) : 0;
+      // Algumas plataformas (Mercado Livre) trazem a tarifa como valor negativo: usa o módulo.
+      const realFee = feeColumns.reduce((s, c) => s + Math.abs(parseMoney(row[c])), 0);
       const orderNumber = mapping.order_number
         ? String(row[mapping.order_number] ?? "").trim()
         : "";
@@ -315,9 +411,9 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
   const missingRequired = FIELD_DEFS.filter((f) => f.required && !mapping[f.key]);
 
   function goPreview() {
-    if (!shopeeChannel) {
+    if (!channel) {
       setError(
-        'Não achei um canal de venda chamado "Shopee" em Configurações. Crie um antes de importar, pra taxa ficar correta.'
+        `Não achei um canal de venda chamado "${platform.label}" em Configurações. Crie um antes de importar, pra taxa ficar correta.`
       );
       return;
     }
@@ -378,8 +474,10 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sales_channel_id: shopeeChannel!.id,
-          use_real_fee: true,
+          sales_channel_id: channel!.id,
+          // Com colunas de taxa na planilha usa o valor real de cada pedido; sem elas (TikTok
+          // Shop) a API calcula pela taxa/faixas cadastradas no canal.
+          use_real_fee: feeColumns.length > 0,
           orders: [...groups.values()],
         }),
       });
@@ -410,11 +508,11 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
     <div className="card">
       <div className="section-title">
         <div>
-          <h2>Importar vendas da Shopee</h2>
+          <h2>Importar vendas</h2>
           <p className="muted">
-            Suba o relatório de pedidos exportado da Shopee (.xlsx ou .csv) — o sistema lê as
-            linhas, casa com seus produtos, usa a taxa real de cada pedido e o status que já está na
-            planilha, sem precisar escolher nada.
+            Suba o relatório de pedidos da Shopee, do Mercado Livre ou do TikTok Shop (.xlsx ou
+            .csv) — o sistema reconhece a plataforma, casa as linhas com seus produtos e variações e
+            usa o status que já está na planilha, sem precisar escolher nada.
           </p>
         </div>
         {step !== "upload" && (
@@ -466,7 +564,10 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
             ))}
           </div>
           <div className="field">
-            <label>Colunas de taxa real a somar (ajuste se a Shopee mudar os nomes)</label>
+            <label>
+              Colunas de taxa real a somar (ajuste se a plataforma mudar os nomes
+              {platform.feeColumns.length === 0 ? "; nenhuma marcada = usa a taxa do canal" : ""})
+            </label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {headers
                 .filter((h) => normalize(h).includes("taxa") || normalize(h).includes("comiss"))
@@ -483,10 +584,12 @@ export function SalesImport({ products, channels }: { products: Product[]; chann
             </div>
           </div>
           <p className="muted">
-            Canal: <strong>{shopeeChannel ? shopeeChannel.name : "Shopee não encontrada"}</strong> —
-            a taxa usada é a soma das colunas marcadas acima (o valor real da Shopee pra cada
-            pedido), não uma taxa fixa configurada no sistema. O status de cada pedido é lido direto
-            da planilha.
+            Plataforma detectada: <strong>{platform.label}</strong> · Canal:{" "}
+            <strong>{channel ? channel.name : `${platform.label} não encontrado`}</strong> —{" "}
+            {feeColumns.length
+              ? "a taxa usada é a soma das colunas marcadas acima (o valor real cobrado em cada pedido)."
+              : "a planilha não traz a taxa, então vale a taxa e as faixas cadastradas nesse canal em Configurações."}{" "}
+            O status de cada pedido é lido direto da planilha.
           </p>
           <button className="btn btn-primary" onClick={goPreview}>
             Ver prévia ({rawRows.length} linhas)

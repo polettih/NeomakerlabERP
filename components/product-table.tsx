@@ -1,8 +1,13 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- miniaturas vêm de URLs externas (Shopee/Storage); next/image exigiria liberar cada domínio */
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ProductActions } from "@/components/product-actions";
 import { ProductEditor, type Material, type Machine } from "@/components/product-editor";
 import { money } from "@/lib/format";
+import { errorMessage } from "@/lib/errors";
+import { variantCost } from "@/lib/variants";
+import { Pagination, usePagination } from "@/components/pagination";
 
 type Img = { id: string; public_url: string; storage_path: string; sort_order: number };
 type Product = {
@@ -15,7 +20,16 @@ type Product = {
   category: string | null;
   created_at: string;
   product_images: Img[] | null;
-  product_variants?: { id: string; name: string; sale_price: number; active: boolean }[] | null;
+  product_variants?:
+    | {
+        id: string;
+        name: string;
+        sale_price: number;
+        units?: number;
+        cost_override?: number | null;
+        active: boolean;
+      }[]
+    | null;
 };
 
 export function ProductTable({
@@ -33,9 +47,38 @@ export function ProductTable({
   energyCostKwh: number;
   organizationId: string;
 }) {
+  const r = useRouter();
+  const [recalcMsg, setRecalcMsg] = useState("");
+  const [recalcBusy, setRecalcBusy] = useState(false);
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("Todas");
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
+
+  async function recalc() {
+    if (
+      !confirm(
+        "Recalcular o custo de todos os produtos com os preços atuais dos materiais? O preço de venda não é alterado."
+      )
+    )
+      return;
+    setRecalcBusy(true);
+    setRecalcMsg("");
+    try {
+      const res = await fetch("/api/products/recalculate-costs", { method: "POST" });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error);
+      setRecalcMsg(
+        j.updated
+          ? `✅ Custo atualizado em ${j.updated} produto(s).`
+          : "Os custos já estavam atualizados."
+      );
+      r.refresh();
+    } catch (e) {
+      setRecalcMsg(errorMessage(e, "Erro ao recalcular."));
+    } finally {
+      setRecalcBusy(false);
+    }
+  }
 
   const categories = useMemo(
     () => ["Todas", ...Array.from(new Set(products.map((p) => p.category || "Bonecos")))],
@@ -52,6 +95,7 @@ export function ProductTable({
       return p.name.toLowerCase().includes(term) || (p.sku ?? "").toLowerCase().includes(term);
     });
   }, [products, q, category, status]);
+  const paged = usePagination(filtered, 25);
 
   return (
     <div className="table-wrap">
@@ -85,8 +129,18 @@ export function ProductTable({
             <option value="active">Disponíveis</option>
             <option value="inactive">Inativos</option>
           </select>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={recalc}
+            disabled={recalcBusy}
+            title="Atualiza o custo dos produtos com o preço médio atual dos materiais"
+          >
+            {recalcBusy ? "Recalculando..." : "↻ Recalcular custos"}
+          </button>
         </div>
       </div>
+      {recalcMsg && <p className="muted">{recalcMsg}</p>}
       <table>
         <thead>
           <tr>
@@ -100,7 +154,7 @@ export function ProductTable({
           </tr>
         </thead>
         <tbody>
-          {filtered.map((p) => {
+          {paged.pageItems.map((p) => {
             const imgs = [...(p.product_images ?? [])].sort((a, b) => a.sort_order - b.sort_order);
             const main = imgs[0]?.public_url;
             const vars = (p.product_variants ?? []).filter((v) => v.active);
@@ -115,7 +169,7 @@ export function ProductTable({
                 <td>
                   <div className="product-name-cell">
                     {main ? (
-                      <img className="product-thumb" src={main} alt="" />
+                      <img className="product-thumb" src={main} alt="" loading="lazy" />
                     ) : (
                       <div className="product-thumb product-thumb-empty">📦</div>
                     )}
@@ -135,9 +189,41 @@ export function ProductTable({
                 <td>
                   {priceLabel}
                   {vars.length > 0 && (
-                    <div className="muted">
-                      {vars.length} variaç{vars.length === 1 ? "ão" : "ões"}
-                    </div>
+                    <details>
+                      <summary className="muted">
+                        {vars.length} variaç{vars.length === 1 ? "ão" : "ões"}
+                      </summary>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Variação</th>
+                            <th>Preço</th>
+                            <th>Custo</th>
+                            <th>Margem</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {vars.map((v) => {
+                            const cost = variantCost(
+                              { units: v.units ?? 1, cost_override: v.cost_override ?? null },
+                              Number(p.estimated_cost)
+                            );
+                            const price = Number(v.sale_price);
+                            const margin = price > 0 ? ((price - cost) / price) * 100 : 0;
+                            return (
+                              <tr key={v.id}>
+                                <td>{v.name}</td>
+                                <td>{money(price)}</td>
+                                <td>{money(cost)}</td>
+                                <td style={{ color: margin < 0 ? "#ef4444" : undefined }}>
+                                  {money(price - cost)} ({margin.toFixed(0)}%)
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </details>
                   )}
                 </td>
                 <td>{money(Number(p.estimated_cost))}</td>
@@ -171,6 +257,13 @@ export function ProductTable({
           )}
         </tbody>
       </table>
+      <Pagination
+        page={paged.page}
+        pages={paged.pages}
+        total={paged.total}
+        pageSize={paged.pageSize}
+        onPage={paged.setPage}
+      />
     </div>
   );
 }

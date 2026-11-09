@@ -213,7 +213,12 @@ export function CreatePaintingRecipeForm({
             </div>
           ))}
         </div>
-        <button type="button" className="btn btn-secondary" onClick={addStep} style={{ marginTop: 8 }}>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={addStep}
+          style={{ marginTop: 8 }}
+        >
           + Adicionar passo
         </button>
       </div>

@@ -8,6 +8,7 @@ import { HoursMinutesInput } from "@/components/hours-minutes-input";
 import { MaterialPicker } from "@/components/material-picker";
 import { VariantsEditor, validateVariants, variantsPayload } from "@/components/variants-editor";
 import type { VariantDraft } from "@/lib/variants";
+import { toStoredQuantity } from "@/lib/product-materials";
 
 const cats = ["Bonecos", "Objetos", "Miniaturas", "Decoração", "Outros"];
 type Material = {
@@ -216,98 +217,37 @@ export function CreateProductForm({
     if (variantError) return setError(variantError);
     setBusy(true);
     try {
-      const res = await fetch("/api/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          category,
-          sale_price: finalPrice,
-          estimated_cost: total,
-        }),
-      });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error || "Erro ao criar produto.");
-      const productId = j.id;
-      if (files?.length) {
-        const sb = createClient();
-        const {
-          data: { user },
-        } = await sb.auth.getUser();
-        if (!user) throw new Error("Sessão expirada.");
-        const rows: {
-          product_id: string;
-          organization_id: string;
-          storage_path: string;
-          public_url: string;
-          sort_order: number;
-        }[] = [];
-        for (let i = 0; i < files.length; i++) {
-          const f = files[i];
-          const ext = f.name.split(".").pop()?.toLowerCase() || "jpg";
-          const path = `${user.id}/${productId}/${crypto.randomUUID()}.${ext}`;
-          const up = await sb.storage
-            .from("product-images")
-            .upload(path, f, { contentType: f.type });
-          if (up.error) throw up.error;
-          const { data: url } = sb.storage.from("product-images").getPublicUrl(path);
-          rows.push({
-            product_id: productId,
-            organization_id: organizationId,
-            storage_path: path,
-            public_url: url.publicUrl,
-            sort_order: i,
-          });
-        }
-        const ins = await sb.from("product_images").insert(rows);
-        if (ins.error) throw ins.error;
-      }
       const links: Link[] = [];
       if (fdmEnabled)
         links.push(
-          ...fdmItems.map((l) => {
-            const m = materials.find((x) => x.id === l.material_id);
-            return {
-              ...l,
-              quantity: Number(l.quantity) / ((m?.unit || "").toLowerCase() === "kg" ? 1000 : 1),
-            };
-          })
+          ...fdmItems.map((l) => ({
+            ...l,
+            quantity: toStoredQuantity(
+              materials.find((x) => x.id === l.material_id),
+              Number(l.quantity)
+            ),
+          }))
         );
       if (resinEnabled)
         links.push(
-          ...resinItems.map((l) => {
-            const m = materials.find((x) => x.id === l.material_id);
-            return {
-              ...l,
-              quantity: Number(l.quantity) / ((m?.unit || "").toLowerCase() === "kg" ? 1000 : 1),
-            };
-          })
+          ...resinItems.map((l) => ({
+            ...l,
+            quantity: toStoredQuantity(
+              materials.find((x) => x.id === l.material_id),
+              Number(l.quantity)
+            ),
+          }))
         );
       links.push(
-        ...extraLinks.map((l) => {
-          const m = materials.find((x) => x.id === l.material_id);
-          return {
-            ...l,
-            quantity: Number(l.quantity) / ((m?.unit || "").toLowerCase() === "kg" ? 1000 : 1),
-          };
-        })
+        ...extraLinks.map((l) => ({
+          ...l,
+          quantity: toStoredQuantity(
+            materials.find((x) => x.id === l.material_id),
+            Number(l.quantity)
+          ),
+        }))
       );
-      for (const l of links) {
-        const mr = await fetch("/api/product-materials", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            product_id: productId,
-            material_id: l.material_id,
-            quantity: Number(l.quantity),
-            usage_type: l.usage_type,
-          }),
-        });
-        const mj = await mr.json();
-        if (!mr.ok) throw new Error(mj.error || "Não foi possível salvar os materiais.");
-      }
       const pricing = {
-        product_id: productId,
         fdm_machine_id: fdmEnabled ? fdmMachineId : null,
         resin_machine_id: resinEnabled ? resinMachineId : null,
         fdm_material_id: fdmEnabled ? fdmItems[0]?.material_id || null : null,
@@ -338,25 +278,63 @@ export function CreateProductForm({
         net_after_commission: suggested,
         profit,
       };
-      const pr = await fetch("/api/product-pricing", {
+      const res = await fetch("/api/products/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(pricing),
+        body: JSON.stringify({
+          product: { name: name.trim(), category, sale_price: finalPrice, estimated_cost: total },
+          materials: links.map((l) => ({
+            material_id: l.material_id,
+            quantity: Number(l.quantity),
+            usage_type: l.usage_type,
+          })),
+          pricing,
+          variants: variants.length ? variantsPayload(variants) : [],
+        }),
       });
-      const pj = await pr.json();
-      if (!pr.ok)
-        throw new Error(pj.error || "Produto criado, mas não foi possível salvar a precificação.");
-      if (variants.length) {
-        const vr = await fetch("/api/product-variants", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ product_id: productId, variants: variantsPayload(variants) }),
-        });
-        const vj = await vr.json();
-        if (!vr.ok)
-          throw new Error(
-            `Produto criado, mas as variações não foram salvas: ${vj.error || "erro"}. Edite o produto para tentar de novo.`
-          );
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Erro ao criar produto.");
+      const productId = j.id;
+      try {
+        if (files?.length) {
+          const sb = createClient();
+          const {
+            data: { user },
+          } = await sb.auth.getUser();
+          if (!user) throw new Error("Sessão expirada.");
+          const rows: {
+            product_id: string;
+            organization_id: string;
+            storage_path: string;
+            public_url: string;
+            sort_order: number;
+          }[] = [];
+          for (let i = 0; i < files.length; i++) {
+            const f = files[i];
+            const ext = f.name.split(".").pop()?.toLowerCase() || "jpg";
+            const path = `${user.id}/${productId}/${crypto.randomUUID()}.${ext}`;
+            const up = await sb.storage
+              .from("product-images")
+              .upload(path, f, { contentType: f.type });
+            if (up.error) throw up.error;
+            const { data: url } = sb.storage.from("product-images").getPublicUrl(path);
+            rows.push({
+              product_id: productId,
+              organization_id: organizationId,
+              storage_path: path,
+              public_url: url.publicUrl,
+              sort_order: i,
+            });
+          }
+          const ins = await sb.from("product_images").insert(rows);
+          if (ins.error) throw ins.error;
+        }
+      } catch (photoErr) {
+        reset();
+        r.refresh();
+        throw new Error(
+          `Produto salvo, mas as fotos não foram enviadas (${errorMessage(photoErr, "erro")}). Adicione-as editando o produto.`
+        );
       }
       reset();
       setOpen(false);
@@ -438,6 +416,7 @@ export function CreateProductForm({
             onChange={setVariants}
             productCost={total}
             basePrice={finalPrice}
+            suggestedPrice={suggested}
           />
           <div className="section-title" style={{ marginTop: 16 }}>
             <h3>🧵 Materiais consumidos</h3>

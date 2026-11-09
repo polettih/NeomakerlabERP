@@ -63,7 +63,10 @@ export function RegisterPaymentButton({
   }
 
   return (
-    <div className="card" style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8, minWidth: 220 }}>
+    <div
+      className="card"
+      style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8, minWidth: 220 }}
+    >
       {error && (
         <div className="error" role="alert">
           {error}
@@ -84,7 +87,12 @@ export function RegisterPaymentButton({
       </div>
       <div className="field">
         <label htmlFor={methodId}>Forma de pagamento</label>
-        <select id={methodId} className="input" value={method} onChange={(e) => setMethod(e.target.value)}>
+        <select
+          id={methodId}
+          className="input"
+          value={method}
+          onChange={(e) => setMethod(e.target.value)}
+        >
           {Object.entries(METHOD_LABEL).map(([k, label]) => (
             <option key={k} value={k}>
               {label}

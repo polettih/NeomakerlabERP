@@ -2,7 +2,15 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EXPENSE_CATEGORIES } from "@/lib/expense-categories";
-import { money, n, monthKey as monthKeyOf, monthLabel, formatDate, isPaidStatus, isCancelledStatus } from "@/lib/format";
+import {
+  money,
+  n,
+  monthKey as monthKeyOf,
+  monthLabel,
+  formatDate,
+  isPaidStatus,
+  isCancelledStatus,
+} from "@/lib/format";
 import { errorMessage } from "@/lib/errors";
 import type { Expense } from "@/lib/types";
 
@@ -114,7 +122,10 @@ export function ExpenseList({ expenses }: { expenses: Expense[] }) {
 
   const visible = useMemo(() => {
     return expenses.filter((e) => {
-      if (monthFilter !== "all" && (monthKeyOf(e.due_date) || monthKeyOf(e.paid_at)) !== monthFilter)
+      if (
+        monthFilter !== "all" &&
+        (monthKeyOf(e.due_date) || monthKeyOf(e.paid_at)) !== monthFilter
+      )
         return false;
       if (statusFilter === "paid" && !isPaidStatus(e.status)) return false;
       if (statusFilter === "cancelled" && !isCancelledStatus(e.status)) return false;
@@ -236,7 +247,11 @@ export function ExpenseList({ expenses }: { expenses: Expense[] }) {
                     <span
                       className={`badge ${isPaidStatus(e.status) ? "kpi-green" : isCancelledStatus(e.status) ? "" : "kpi-yellow"}`}
                     >
-                      {isPaidStatus(e.status) ? "Paga" : isCancelledStatus(e.status) ? "Cancelada" : "A pagar"}
+                      {isPaidStatus(e.status)
+                        ? "Paga"
+                        : isCancelledStatus(e.status)
+                          ? "Cancelada"
+                          : "A pagar"}
                     </span>
                     {e.source_type === "recurring" && (
                       <small className="muted" style={{ marginLeft: 6 }}>

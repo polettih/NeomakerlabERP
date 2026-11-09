@@ -36,7 +36,11 @@ export function FormTabs({
         ))}
       </div>
       {sections.map((s) => (
-        <div key={s.id} className="page-tab-panel" style={{ display: s.id === active ? "grid" : "none" }}>
+        <div
+          key={s.id}
+          className="page-tab-panel"
+          style={{ display: s.id === active ? "grid" : "none" }}
+        >
           {s.content}
         </div>
       ))}

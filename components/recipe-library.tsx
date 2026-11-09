@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- fotos vêm de URLs externas (Shopee/Storage); next/image exigiria liberar cada domínio */
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { errorMessage } from "@/lib/errors";

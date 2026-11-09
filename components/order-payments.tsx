@@ -50,11 +50,7 @@ export function OrderPayments({ payments }: { payments: Payment[] }) {
 
   return (
     <div>
-      <button
-        type="button"
-        className="btn btn-secondary btn-sm"
-        onClick={() => setOpen((v) => !v)}
-      >
+      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen((v) => !v)}>
         {open ? "Ocultar" : "Ver"} pagamentos ({payments.length})
       </button>
       {open && (
@@ -65,10 +61,7 @@ export function OrderPayments({ payments }: { payments: Payment[] }) {
             </div>
           )}
           {payments.map((p) => (
-            <div
-              key={p.id}
-              style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}
-            >
+            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
               <span>
                 {money(Number(p.amount))} · {METHOD_LABEL[p.payment_method] ?? p.payment_method} ·{" "}
                 {fmt(p.payment_date)}

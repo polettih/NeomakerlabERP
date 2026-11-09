@@ -109,7 +109,9 @@ function FeeBandsEditor({
             placeholder="Sem teto"
             style={{ maxWidth: 100 }}
             value={b.max ?? ""}
-            onChange={(e) => update(i, { max: e.target.value === "" ? null : Number(e.target.value) })}
+            onChange={(e) =>
+              update(i, { max: e.target.value === "" ? null : Number(e.target.value) })
+            }
           />
           <input
             className="input"
@@ -120,7 +122,11 @@ function FeeBandsEditor({
             placeholder="Taxa %"
             style={{ maxWidth: 90 }}
             value={(b.fee_percent * 100).toFixed(2)}
-            onChange={(e) => update(i, { fee_percent: Math.max(0, Math.min(100, Number(e.target.value) || 0)) / 100 })}
+            onChange={(e) =>
+              update(i, {
+                fee_percent: Math.max(0, Math.min(100, Number(e.target.value) || 0)) / 100,
+              })
+            }
           />
           <span>%+</span>
           <input
@@ -254,8 +260,8 @@ export function ChannelManager({ channels }: { channels: Channel[] }) {
         </div>
         {presetNote && (
           <p className="muted" style={{ marginTop: 6 }}>
-            ℹ️ {presetNote} Valores de referência (ago/2026) — confira o percentual exato da
-            sua categoria na Central do Vendedor antes de confirmar.
+            ℹ️ {presetNote} Valores de referência (ago/2026) — confira o percentual exato da sua
+            categoria na Central do Vendedor antes de confirmar.
           </p>
         )}
       </div>
@@ -415,7 +421,11 @@ export function ChannelManager({ channels }: { channels: Channel[] }) {
                       >
                         {c.active ? "Desativar" : "Ativar"}
                       </button>{" "}
-                      <button className="btn btn-danger btn-sm" disabled={busy} onClick={() => remove(c.id)}>
+                      <button
+                        className="btn btn-danger btn-sm"
+                        disabled={busy}
+                        onClick={() => remove(c.id)}
+                      >
                         Excluir
                       </button>
                     </td>

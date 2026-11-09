@@ -1,21 +1,18 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- fotos vêm de URLs externas (Shopee/Storage); next/image exigiria liberar cada domínio */
 import { useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { money, n } from "@/lib/format";
+import { money } from "@/lib/format";
 import { errorMessage } from "@/lib/errors";
 import { HoursMinutesInput } from "@/components/hours-minutes-input";
 import { MaterialPicker } from "@/components/material-picker";
 import { VariantsEditor, validateVariants, variantsPayload } from "@/components/variants-editor";
 import { toDraft, type Variant, type VariantDraft } from "@/lib/variants";
+import { costOfShown, toDisplayQuantity, toStoredQuantity } from "@/lib/product-materials";
 const cats = ["Bonecos", "Objetos", "Miniaturas", "Decoração", "Outros"];
 const isWeight = (u: string) => ["kg", "g", "grama", "gramas"].includes(u.toLowerCase());
-const costOf = (m: Material | undefined, q: number) => {
-  if (!m) return 0;
-  return (m.unit || "").toLowerCase() === "kg"
-    ? (q / 1000) * n(m.average_cost)
-    : q * n(m.average_cost);
-};
+const costOf = costOfShown;
 type Img = { id: string; public_url: string; storage_path: string; sort_order: number };
 type Product = {
   id: string;
@@ -72,7 +69,8 @@ export function ProductEditor({
     [category, setCategory] = useState(product.category || "Bonecos"),
     [priceOverride, setPriceOverride] = useState(String(product.sale_price)),
     [images, setImages] = useState(product.images || []),
-    [variants, setVariants] = useState<VariantDraft[]>([]);
+    [variants, setVariants] = useState<VariantDraft[]>([]),
+    [variantsLoaded, setVariantsLoaded] = useState(false);
   const [fdmEnabled, setFdmEnabled] = useState(false),
     [resinEnabled, setResinEnabled] = useState(false),
     [fdmMachineId, setFdmMachineId] = useState(""),
@@ -161,7 +159,10 @@ export function ProductEditor({
         fetch(`/api/product-materials?product_id=${product.id}`),
         fetch(`/api/product-variants?product_id=${product.id}`),
       ]);
-      if (vr.ok) setVariants(((await vr.json()) as Variant[]).map(toDraft));
+      if (vr.ok) {
+        setVariants(((await vr.json()) as Variant[]).map(toDraft));
+        setVariantsLoaded(true);
+      }
       const pricing = await pr.json(),
         links = await pm.json();
       if (!pr.ok) throw new Error(pricing.error);
@@ -176,7 +177,7 @@ export function ProductEditor({
       setResinHours(String(pricing?.resin_hours ?? 0));
       const toDisplay = (x: ExtraLink) => {
         const m = materials.find((a) => a.id === x.material_id);
-        return m?.unit?.toLowerCase() === "kg" ? Number(x.quantity) * 1000 : Number(x.quantity);
+        return toDisplayQuantity(m, Number(x.quantity));
       };
       setFdmItems(fdmLinks.map((x: ExtraLink) => ({ ...x, displayQty: toDisplay(x) })));
       setResinItems(resinLinks.map((x: ExtraLink) => ({ ...x, displayQty: toDisplay(x) })));
@@ -269,28 +270,13 @@ export function ProductEditor({
         throw new Error("Informe um preço de venda válido.");
       const variantError = validateVariants(variants);
       if (variantError) throw new Error(variantError);
-      const res = await fetch(`/api/products/${product.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, sale_price: finalPrice, estimated_cost: total, category }),
-      });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error);
-      const del = await fetch("/api/product-materials/bulk", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_id: product.id }),
-      });
-      if (!del.ok) throw new Error("Não foi possível atualizar os materiais do produto.");
       const links: ExtraLink[] = [];
       if (fdmEnabled)
         for (const x of fdmItems) {
           const m = materials.find((a) => a.id === x.material_id);
           links.push({
             material_id: x.material_id,
-            quantity:
-              Number((x.displayQty ?? x.quantity) || 0) /
-              ((m?.unit || "").toLowerCase() === "kg" ? 1000 : 1),
+            quantity: toStoredQuantity(m, Number((x.displayQty ?? x.quantity) || 0)),
             usage_type: "fdm",
           });
         }
@@ -299,9 +285,7 @@ export function ProductEditor({
           const m = materials.find((a) => a.id === x.material_id);
           links.push({
             material_id: x.material_id,
-            quantity:
-              Number((x.displayQty ?? x.quantity) || 0) /
-              ((m?.unit || "").toLowerCase() === "kg" ? 1000 : 1),
+            quantity: toStoredQuantity(m, Number((x.displayQty ?? x.quantity) || 0)),
             usage_type: "resin",
           });
         }
@@ -309,22 +293,11 @@ export function ProductEditor({
         const m = materials.find((a) => a.id === x.material_id);
         links.push({
           material_id: x.material_id,
-          quantity:
-            Number((x.displayQty ?? x.quantity) || 0) /
-            ((m?.unit || "").toLowerCase() === "kg" ? 1000 : 1),
+          quantity: toStoredQuantity(m, Number((x.displayQty ?? x.quantity) || 0)),
           usage_type: "other",
         });
       }
-      for (const x of links) {
-        const rr = await fetch("/api/product-materials", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ product_id: product.id, ...x }),
-        });
-        if (!rr.ok) throw new Error((await rr.json()).error || "Erro ao salvar material.");
-      }
       const pricing = {
-        product_id: product.id,
         fdm_machine_id: fdmEnabled ? fdmMachineId : null,
         resin_machine_id: resinEnabled ? resinMachineId : null,
         fdm_material_id: fdmEnabled ? fdmItems[0]?.material_id || null : null,
@@ -354,18 +327,22 @@ export function ProductEditor({
         net_after_commission: suggested,
         profit,
       };
-      const pp = await fetch("/api/product-pricing", {
+      // Uma única chamada grava produto, materiais, precificação e variações; se algo falhar,
+      // o servidor desfaz tudo e o produto continua como estava.
+      const res = await fetch("/api/products/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(pricing),
+        body: JSON.stringify({
+          product_id: product.id,
+          product: { name, category, sale_price: finalPrice, estimated_cost: total },
+          materials: links,
+          pricing,
+          // Só envia as variações se foram carregadas, para nunca apagá-las por engano.
+          variants: variantsLoaded ? variantsPayload(variants) : undefined,
+        }),
       });
-      if (!pp.ok) throw new Error((await pp.json()).error || "Erro ao salvar precificação.");
-      const vsave = await fetch("/api/product-variants", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_id: product.id, variants: variantsPayload(variants) }),
-      });
-      if (!vsave.ok) throw new Error((await vsave.json()).error || "Erro ao salvar variações.");
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Erro ao salvar produto.");
       setOpen(false);
       r.refresh();
     } catch (e) {
@@ -938,6 +915,7 @@ export function ProductEditor({
                   onChange={setVariants}
                   productCost={total}
                   basePrice={finalPrice}
+                  suggestedPrice={suggested}
                 />
                 <div className="section-title">
                   <div>
@@ -963,7 +941,7 @@ export function ProductEditor({
                 <div className="photo-grid">
                   {images.map((img, i) => (
                     <div className="photo-item" key={img.id}>
-                      <img src={img.public_url} alt="" />
+                      <img src={img.public_url} alt="" loading="lazy" />
                       <div className="photo-caption">
                         <span className="badge">{i === 0 ? "Principal" : `#${i + 1}`}</span>
                         <button className="btn btn-danger btn-sm" onClick={() => remove(img)}>

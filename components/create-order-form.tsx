@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- fotos vêm de URLs externas (Shopee/Storage); next/image exigiria liberar cada domínio */
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { money } from "@/lib/format";
@@ -48,6 +49,7 @@ type Mat = {
   color_name: string | null;
   average_cost: number;
   unit: string;
+  quantity_on_hand?: number | null;
 };
 type C = { id: string; name: string };
 type Ch = {
@@ -179,6 +181,34 @@ export function CreateOrderForm({
     return { net, channelFee, fee, feePercent, fixedFee, band, netAfterFee, gross };
   }, [merchandise, discount, shipping, campaignFee, selectedChannel, feeMode]);
 
+  // Aviso de estoque: soma o consumo de todos os itens do pedido (com a troca de material e as
+  // unidades da variação) e compara com o estoque atual. Não bloqueia o pedido — o sistema só
+  // exige estoque quando a produção é iniciada.
+  const shortages = (() => {
+    const need = new Map<string, number>();
+    for (const l of lines) {
+      const p = products.find((x) => x.id === l.product_id);
+      const v = activeVariants(p).find((x) => x.id === l.variant_id);
+      const mult = (Number(l.quantity) || 0) * (v ? Number(v.units) || 1 : 1);
+      for (const m of p?.product_materials ?? []) {
+        const id = l.overrides[m.material_id] ?? m.material_id;
+        need.set(id, (need.get(id) ?? 0) + Number(m.quantity) * mult);
+      }
+    }
+    const out: { name: string; unit: string; need: number; have: number }[] = [];
+    for (const [id, qty] of need) {
+      const m = materials.find((x) => x.id === id);
+      if (!m || m.quantity_on_hand === undefined || m.quantity_on_hand === null) continue;
+      if (qty > Number(m.quantity_on_hand))
+        out.push({
+          name: m.color_name ? `${m.name} — ${m.color_name}` : m.name,
+          unit: m.unit,
+          need: qty,
+          have: Number(m.quantity_on_hand),
+        });
+    }
+    return out;
+  })();
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError("");
@@ -236,6 +266,23 @@ export function CreateOrderForm({
 
   return (
     <form onSubmit={submit} className="card grid" style={{ gap: 18 }}>
+      {shortages.length > 0 && (
+        <div className="card" style={{ borderColor: "#f59e0b" }} role="status">
+          <strong>⚠️ Estoque insuficiente para este pedido</strong>
+          <ul style={{ margin: "6px 0 0 18px" }}>
+            {shortages.map((s) => (
+              <li key={s.name}>
+                {s.name}: precisa de {s.need.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}{" "}
+                {s.unit}, tem {s.have.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}{" "}
+                {s.unit}
+              </li>
+            ))}
+          </ul>
+          <small className="muted">
+            Você ainda pode lançar o pedido; compre o material antes de iniciar a produção.
+          </small>
+        </div>
+      )}
       {error && <div className="error">{error}</div>}
       <div className="form-grid">
         <div className="field">
@@ -331,7 +378,7 @@ export function CreateOrderForm({
                 </select>
                 {thumb && (
                   <div className="product-preview">
-                    <img className="product-thumb" src={thumb.public_url} alt="" />
+                    <img className="product-thumb" src={thumb.public_url} alt="" loading="lazy" />
                     <div className="muted">{p?.category || "Bonecos"}</div>
                   </div>
                 )}

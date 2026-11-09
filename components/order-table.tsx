@@ -5,6 +5,7 @@ import { OrderDeleteButton } from "@/components/order-delete-button";
 import { RegisterPaymentButton } from "@/components/register-payment-button";
 import { OrderPayments, type Payment } from "@/components/order-payments";
 import { money } from "@/lib/format";
+import { Pagination, usePagination } from "@/components/pagination";
 
 const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
 
@@ -51,7 +52,6 @@ const PAYMENT_CLASS: Record<string, string> = {
   cancelled: "",
 };
 
-
 export function OrderTable({ orders }: { orders: Order[] }) {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
@@ -59,10 +59,7 @@ export function OrderTable({ orders }: { orders: Order[] }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
-  const statuses = useMemo(
-    () => Array.from(new Set(orders.map((o) => o.status))),
-    [orders]
-  );
+  const statuses = useMemo(() => Array.from(new Set(orders.map((o) => o.status))), [orders]);
   const payments = useMemo(
     () => Array.from(new Set(orders.map((o) => o.payment_status))),
     [orders]
@@ -83,6 +80,7 @@ export function OrderTable({ orders }: { orders: Order[] }) {
       );
     });
   }, [orders, q, status, payment, from, to]);
+  const paged = usePagination(filtered, 25);
 
   return (
     <>
@@ -148,13 +146,17 @@ export function OrderTable({ orders }: { orders: Order[] }) {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((o) => (
+            {paged.pageItems.map((o) => (
               <tr key={o.id}>
                 <td>{fmt(o.order_date)}</td>
                 <td>{o.customers?.name || "—"}</td>
                 <td>
                   {o.order_items?.length ? (
-                    <span title={o.order_items.map((i) => `${i.quantity}× ${i.product_name}`).join(", ")}>
+                    <span
+                      title={o.order_items
+                        .map((i) => `${i.quantity}× ${i.product_name}`)
+                        .join(", ")}
+                    >
                       {o.order_items.length > 1
                         ? `${o.order_items.reduce((s, i) => s + Number(i.quantity), 0)} itens (${o.order_items.length} produtos)`
                         : `${o.order_items[0].quantity}× ${o.order_items[0].product_name}`}
@@ -181,7 +183,14 @@ export function OrderTable({ orders }: { orders: Order[] }) {
                 </td>
                 <td>{money(Number(o.gross_total ?? o.total))}</td>
                 <td>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                      alignItems: "flex-start",
+                    }}
+                  >
                     {o.status !== "cancelled" &&
                       o.payment_status !== "paid" &&
                       o.payment_status !== "refunded" && (
@@ -208,6 +217,13 @@ export function OrderTable({ orders }: { orders: Order[] }) {
           </tbody>
         </table>
       </div>
+      <Pagination
+        page={paged.page}
+        pages={paged.pages}
+        total={paged.total}
+        pageSize={paged.pageSize}
+        onPage={paged.setPage}
+      />
     </>
   );
 }

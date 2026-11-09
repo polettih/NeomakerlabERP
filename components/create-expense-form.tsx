@@ -70,7 +70,12 @@ export function CreateExpenseForm() {
       </div>
       <div className="field">
         <label htmlFor={catId}>Categoria</label>
-        <select id={catId} className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
+        <select
+          id={catId}
+          className="input"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+        >
           <option value="">Sem categoria</option>
           {EXPENSE_CATEGORIES.map((c) => (
             <option key={c} value={c}>

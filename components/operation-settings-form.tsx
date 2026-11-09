@@ -49,8 +49,7 @@ export function OperationSettingsForm({
     <div className="card">
       <h2>⚙️ Custos operacionais</h2>
       <p className="muted">
-        Usados para calcular o custo estimado de produção em Produtos e o resultado em
-        Financeiro.
+        Usados para calcular o custo estimado de produção em Produtos e o resultado em Financeiro.
       </p>
       <div className="form-grid">
         <div className="field">

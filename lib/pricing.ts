@@ -28,7 +28,8 @@ export function resolveChannelFee(
   tiers: ChannelTier[] = []
 ): { feePercent: number; fixedFee: number; fee: number } {
   const tier = tiers.find(
-    (t) => merchandiseValue >= t.min_value && (t.max_value === null || merchandiseValue < t.max_value)
+    (t) =>
+      merchandiseValue >= t.min_value && (t.max_value === null || merchandiseValue < t.max_value)
   );
   const feePercent = tier ? tier.fee_percent : channel.fee_percent;
   const fixedFee = tier ? tier.fixed_fee : channel.fixed_fee;
