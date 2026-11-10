@@ -8,6 +8,7 @@ import { money } from "@/lib/format";
 import { errorMessage } from "@/lib/errors";
 import { variantCost } from "@/lib/variants";
 import { Pagination, usePagination } from "@/components/pagination";
+import { BulkBar, confirmBulk, useSelection } from "@/components/bulk-select";
 
 type Img = { id: string; public_url: string; storage_path: string; sort_order: number };
 type Product = {
@@ -96,6 +97,37 @@ export function ProductTable({
     });
   }, [products, q, category, status]);
   const paged = usePagination(filtered, 25);
+  const sel = useSelection(filtered.map((p) => p.id));
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  async function bulkDelete() {
+    if (
+      !confirmBulk(
+        sel.ids.length,
+        "produto(s)",
+        "Pedidos antigos continuam com o nome do produto gravado, mas ele sai do catálogo."
+      )
+    )
+      return;
+    setBulkBusy(true);
+    setRecalcMsg("");
+    try {
+      const res = await fetch("/api/products/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: sel.ids }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error);
+      setRecalcMsg(`✅ ${j.deleted} produto(s) excluído(s).`);
+      sel.clear();
+      r.refresh();
+    } catch (e) {
+      setRecalcMsg(errorMessage(e, "Erro ao excluir."));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
 
   return (
     <div className="table-wrap">
@@ -141,9 +173,25 @@ export function ProductTable({
         </div>
       </div>
       {recalcMsg && <p className="muted">{recalcMsg}</p>}
+      <BulkBar
+        count={sel.ids.length}
+        label="produto"
+        warning="a exclusão não pode ser desfeita"
+        onDelete={bulkDelete}
+        onClear={sel.clear}
+        busy={bulkBusy}
+      />
       <table>
         <thead>
           <tr>
+            <th style={{ width: 32 }}>
+              <input
+                type="checkbox"
+                aria-label="Selecionar todos os produtos filtrados"
+                checked={sel.allChecked}
+                onChange={sel.toggleAll}
+              />
+            </th>
             <th>Produto</th>
             <th>Categoria</th>
             <th>Status</th>
@@ -166,6 +214,14 @@ export function ProductTable({
               : money(Number(p.sale_price));
             return (
               <tr key={p.id}>
+                <td>
+                  <input
+                    type="checkbox"
+                    aria-label={`Selecionar ${p.name}`}
+                    checked={sel.has(p.id)}
+                    onChange={() => sel.toggle(p.id)}
+                  />
+                </td>
                 <td>
                   <div className="product-name-cell">
                     {main ? (
@@ -248,7 +304,7 @@ export function ProductTable({
           })}
           {!filtered.length && (
             <tr>
-              <td colSpan={7} className="muted">
+              <td colSpan={8} className="muted">
                 {products.length
                   ? "Nenhum produto encontrado com esses filtros."
                   : "Nenhum produto cadastrado."}

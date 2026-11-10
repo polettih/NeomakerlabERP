@@ -6,6 +6,9 @@ import { RegisterPaymentButton } from "@/components/register-payment-button";
 import { OrderPayments, type Payment } from "@/components/order-payments";
 import { money } from "@/lib/format";
 import { Pagination, usePagination } from "@/components/pagination";
+import { BulkBar, confirmBulk, useSelection } from "@/components/bulk-select";
+import { useRouter } from "next/navigation";
+import { errorMessage } from "@/lib/errors";
 
 const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—");
 
@@ -81,6 +84,42 @@ export function OrderTable({ orders }: { orders: Order[] }) {
     });
   }, [orders, q, status, payment, from, to]);
   const paged = usePagination(filtered, 25);
+  const r = useRouter();
+  const sel = useSelection(filtered.map((o) => o.id));
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState("");
+
+  async function bulkDelete() {
+    if (
+      !confirmBulk(
+        sel.ids.length,
+        "pedido(s)",
+        "Os pagamentos serão excluídos e o material já consumido pela produção volta ao estoque."
+      )
+    )
+      return;
+    setBulkBusy(true);
+    setBulkMsg("");
+    try {
+      const res = await fetch("/api/orders/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: sel.ids }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error);
+      setBulkMsg(
+        `✅ ${j.deleted} pedido(s) excluído(s).` +
+          (j.errors?.length ? ` Alguns falharam: ${j.errors.join("; ")}` : "")
+      );
+      sel.clear();
+      r.refresh();
+    } catch (e) {
+      setBulkMsg(errorMessage(e, "Erro ao excluir."));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
 
   return (
     <>
@@ -129,10 +168,27 @@ export function OrderTable({ orders }: { orders: Order[] }) {
           />
         </div>
       </div>
+      {bulkMsg && <p className="muted">{bulkMsg}</p>}
+      <BulkBar
+        count={sel.ids.length}
+        label="pedido"
+        warning="pagamentos serão excluídos e o material consumido volta ao estoque"
+        onDelete={bulkDelete}
+        onClear={sel.clear}
+        busy={bulkBusy}
+      />
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
+              <th style={{ width: 32 }}>
+                <input
+                  type="checkbox"
+                  aria-label="Selecionar todos os pedidos filtrados"
+                  checked={sel.allChecked}
+                  onChange={sel.toggleAll}
+                />
+              </th>
               <th>Data</th>
               <th>Cliente</th>
               <th>Itens</th>
@@ -148,6 +204,14 @@ export function OrderTable({ orders }: { orders: Order[] }) {
           <tbody>
             {paged.pageItems.map((o) => (
               <tr key={o.id}>
+                <td>
+                  <input
+                    type="checkbox"
+                    aria-label="Selecionar pedido"
+                    checked={sel.has(o.id)}
+                    onChange={() => sel.toggle(o.id)}
+                  />
+                </td>
                 <td>{fmt(o.order_date)}</td>
                 <td>{o.customers?.name || "—"}</td>
                 <td>
@@ -207,7 +271,7 @@ export function OrderTable({ orders }: { orders: Order[] }) {
             ))}
             {!filtered.length && (
               <tr>
-                <td colSpan={10} className="muted">
+                <td colSpan={11} className="muted">
                   {orders.length
                     ? "Nenhum pedido encontrado com esses filtros."
                     : "Nenhum pedido cadastrado."}
