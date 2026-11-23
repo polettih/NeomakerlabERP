@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import Link from "next/link";
-import { CreateProductForm } from "@/components/create-product-form";
+import { ProductForm } from "@/components/product-form";
 import { ProductTable } from "@/components/product-table";
 
 type ProductRow = {
@@ -34,7 +34,7 @@ export default async function ProdutosPage() {
       supabase
         .from("products")
         .select(
-          "id,name,sku,sale_price,estimated_cost,active,category,created_at,product_images(id,public_url,storage_path,sort_order),product_variants(id,name,sale_price,units,cost_override,active,sort_order)"
+          "id,name,sku,external_ids,sale_price,estimated_cost,active,category,created_at,product_images(id,public_url,storage_path,sort_order),product_variants(id,name,sale_price,units,cost_override,active,sort_order)"
         )
         .order("created_at", { ascending: false }),
       supabase
@@ -74,7 +74,13 @@ export default async function ProdutosPage() {
           </Link>
         </div>
       </div>
-      <CreateProductForm
+      <ProductForm
+        existingProducts={(data ?? []).map((p) => ({
+          id: p.id,
+          name: p.name,
+          external_ids:
+            (p as { external_ids?: Record<string, string> | null }).external_ids ?? null,
+        }))}
         materials={materials ?? []}
         machines={machines ?? []}
         laborHourRate={Number(settings?.labor_hour_rate ?? 30)}

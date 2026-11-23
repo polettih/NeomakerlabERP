@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProductActions } from "@/components/product-actions";
-import { ProductEditor, type Material, type Machine } from "@/components/product-editor";
+import { ProductForm, type Material, type Machine } from "@/components/product-form";
 import { money } from "@/lib/format";
 import { errorMessage } from "@/lib/errors";
 import { variantCost } from "@/lib/variants";
@@ -288,7 +288,7 @@ export function ProductTable({
                 </td>
                 <td>
                   <div className="actions">
-                    <ProductEditor
+                    <ProductForm
                       product={{ ...p, category: p.category || "Bonecos", images: imgs }}
                       materials={materials}
                       machines={machines}

@@ -8,3 +8,5 @@ Os números repetidos (016, 018, 019) foram diferenciados com sufixo `a`/`b` —
 
 Instalação nova: rode todas, de `001` até a última. Instalação existente: rode só as
 posteriores à última que você já aplicou.
+
+- `022_product_cost_model.sql` — guarda a calculadora de custo editável do produto (gramas, horas, valor da hora, perda, margem, custo manual).

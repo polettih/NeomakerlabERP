@@ -17,7 +17,11 @@ export async function savePricing(
     .maybeSingle();
   const values = {
     ...input,
-    labor_hour: Number(settings?.labor_hour_rate ?? 30),
+    // Valor da hora informado no produto vale; sem ele, usa o padrão da organização.
+    labor_hour:
+      Number(input.labor_hour) > 0
+        ? Number(input.labor_hour)
+        : Number(settings?.labor_hour_rate ?? 30),
     marketplace_commission: 0,
   };
   const { error } = await supabase
